@@ -1,3 +1,8 @@
+
+declare const google: any;
+
+let tokenClient: any = null;
+let accessToken: string | null = null;
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events'
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null

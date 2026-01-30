@@ -82,45 +82,15 @@ export async function createCalendarEvent(event: CalendarEvent): Promise<{ id: s
   const response = await fetch(
     'https://www.googleapis.com/calendar/v3/calendars/primary/events',
     {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        summary: event.title,
-        start: { dateTime: start },
-        end: { dateTime: end },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 10 },
-            { method: 'email', minutes: 10 },
-          ],
-        },
-      }),
-    }
-  )
-
-  if (!response.ok) {
-    const err = await response.json()
-    throw new Error(err.error?.message || 'Failed to create event')
-  }
-
-  return response.json()
+      // Tell TypeScript to trust the global 'google' object
+declare global {
+  const google: any;
 }
 
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  const token = getToken()
-  if (!token) return
+export const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
-  await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  )
-}
+export let tokenClient: any = null;
+export let accessToken: string | null = null;
+
+// This ensures TypeScript doesn't try to check google namespace during build
+

@@ -21,22 +21,34 @@ export default function Home() {
   useEffect(() => {
     setMounted(true)
     // Load saved reminders from localStorage
-    const saved = localStorage.getItem('thoughtful-reminders')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
+    try {
+      const saved = localStorage.getItem('thoughtful-reminders')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
+        }
+      }
+    } catch {
+      localStorage.removeItem('thoughtful-reminders')
     }
     // Init Google auth
-    const script = document.createElement('script')
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.onload = () => {
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
-      initGoogleAuth(clientId)
-      setGoogleReady(true)
-      setSignedIn(isSignedIn())
+    try {
+      const script = document.createElement('script')
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      script.onload = () => {
+        const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
+        if (clientId) {
+          initGoogleAuth(clientId)
+          setGoogleReady(true)
+          setSignedIn(isSignedIn())
+        }
+      }
+      document.head.appendChild(script)
+    } catch {
+      // Google auth failed to load, app still works without it
     }
-    document.head.appendChild(script)
   }, [])
 
   // Persist reminders to localStorage
@@ -46,16 +58,12 @@ export default function Home() {
     }
   }, [reminders, mounted])
 
-  const handleGoogleSignIn = async () => {
-    try {
-      await signIn()
+  const handleGoogleSignIn = () => {
+    signIn(() => {
       setSignedIn(true)
       setStatus('Signed in to Google')
       setTimeout(() => setStatus(null), 2000)
-    } catch {
-      setStatus('Sign-in failed. Check your Client ID.')
-      setTimeout(() => setStatus(null), 3000)
-    }
+    })
   }
 
   const addReminderWithDate = useCallback(async (text: string, date: Date) => {
@@ -77,11 +85,7 @@ export default function Home() {
     if (isSignedIn()) {
       try {
         setStatus('Creating calendar event...')
-        const result = await createCalendarEvent({ title: friendlyTitle, date })
-        // Store the calendar event ID so we can delete later
-        setReminders(prev =>
-          prev.map(r => r.id === newReminder.id ? { ...r, calendarEventId: result.id } : r)
-        )
+        await createCalendarEvent({ title: friendlyTitle, date: date.toISOString() })
         setStatus('Calendar event created')
         setTimeout(() => setStatus(null), 2000)
       } catch {

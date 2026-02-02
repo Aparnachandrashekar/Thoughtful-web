@@ -27,10 +27,16 @@ export default function Home() {
       setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
     }
     // Init Google auth
-    initGoogleAuth().then(() => {
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.onload = () => {
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
+      initGoogleAuth(clientId)
       setGoogleReady(true)
       setSignedIn(isSignedIn())
-    })
+    }
+    document.head.appendChild(script)
   }, [])
 
   // Persist reminders to localStorage

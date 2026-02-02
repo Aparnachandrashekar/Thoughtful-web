@@ -3,7 +3,6 @@ export const SCOPES = 'https://www.googleapis.com/auth/calendar.events'
 export let tokenClient: any = null
 export let accessToken: string | null = null
 
-// Initialize Google OAuth
 export function initGoogleAuth(clientId: string) {
   if (typeof window === 'undefined') return
   const g = (window as any).google
@@ -18,46 +17,15 @@ export function initGoogleAuth(clientId: string) {
   })
 }
 
-// Trigger sign-in popup
 export function signIn() {
   if (!tokenClient) return
   tokenClient.requestAccessToken()
 }
 
-// Check login state
-export function isSignedIn() {
-export const SCOPES = 'https://www.googleapis.com/auth/calendar.events'
-
-export let tokenClient: any = null
-export let accessToken: string | null = null
-
-// Initialize Google OAuth
-export function initGoogleAuth(clientId: string) {
-  if (typeof window === 'undefined') return
-  const g = (window as any).google
-  if (!g) return
-
-  tokenClient = g.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: SCOPES,
-    callback: (resp: any) => {
-      accessToken = resp.access_token
-    },
-  })
-}
-
-// Trigger sign-in popup
-export function signIn() {
-  if (!tokenClient) return
-  tokenClient.requestAccessToken()
-}
-
-// Check login state
 export function isSignedIn() {
   return !!accessToken
 }
 
-// Create Google Calendar event
 export async function createCalendarEvent(event: {
   title: string
   date: string
@@ -78,7 +46,6 @@ export async function createCalendarEvent(event: {
   })
 }
 
-// Delete event (placeholder for now)
 export async function deleteCalendarEvent(eventId: string) {
   if (!accessToken) return
 
@@ -90,5 +57,4 @@ export async function deleteCalendarEvent(eventId: string) {
     }
   )
 }
-;
 

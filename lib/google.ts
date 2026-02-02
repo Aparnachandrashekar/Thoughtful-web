@@ -17,5 +17,14 @@ export function initGoogleClient(clientId: string) {
     },
   })
 }
+
+export function signIn() {
+  if (!tokenClient) return
+  tokenClient.requestAccessToken()
+}
+
+export function isSignedIn() {
+  return !!accessToken
+}
 ;
 

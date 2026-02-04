@@ -51,8 +51,7 @@ export async function createCalendarEvent(event: {
       reminders: {
         useDefault: false,
         overrides: [
-          { method: 'popup', minutes: 0 },
-          { method: 'email', minutes: 10 },
+          { method: 'popup', minutes: 10 },
         ],
       },
     }),

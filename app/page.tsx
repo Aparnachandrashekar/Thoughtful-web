@@ -274,17 +274,31 @@ export default function Home() {
           </div>
         )}
 
-        {/* Input */}
-        <div className="mb-10 animate-slide-up">
-          <ReminderInput onSubmit={handleAddReminder} />
-        </div>
+        {/* Show input and reminders only when signed in */}
+        {signedIn ? (
+          <>
+            {/* Input */}
+            <div className="mb-6 animate-slide-up">
+              <ReminderInput onSubmit={handleAddReminder} />
+            </div>
 
-        {/* Reminder List */}
-        <ReminderList
-          reminders={reminders}
-          onToggle={handleToggle}
-          onDelete={handleDelete}
-        />
+            {/* Help text */}
+            <p className="text-center text-sm text-gray-400 mb-6">
+              Click X to delete. To edit, type &quot;update&quot; followed by the event name and new details.
+            </p>
+
+            {/* Reminder List */}
+            <ReminderList
+              reminders={reminders}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+            />
+          </>
+        ) : (
+          <div className="text-center text-gray-400 py-10">
+            <p>Sign in with Google to create reminders</p>
+          </div>
+        )}
       </div>
 
       {/* Date Picker Modal */}

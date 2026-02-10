@@ -20,6 +20,35 @@ import {
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
+// Helper to generate human-readable pattern description
+function getPatternDescription(recurrence: RecurrenceInfo): string {
+  const dayNames: Record<string, string> = {
+    'SU': 'Sunday', 'MO': 'Monday', 'TU': 'Tuesday', 'WE': 'Wednesday',
+    'TH': 'Thursday', 'FR': 'Friday', 'SA': 'Saturday'
+  }
+  const positionNames: Record<number, string> = {
+    1: 'first', 2: 'second', 3: 'third', 4: 'fourth', '-1': 'last'
+  }
+
+  if (recurrence.bySetPos && recurrence.byDay) {
+    const pos = positionNames[recurrence.bySetPos] || ''
+    const day = dayNames[recurrence.byDay] || recurrence.byDay
+    return `${pos} ${day} of every month`
+  }
+  if (recurrence.byMonthDay) {
+    return `day ${recurrence.byMonthDay} of every month`
+  }
+  if (recurrence.interval && recurrence.interval > 1 && recurrence.byDay) {
+    const day = dayNames[recurrence.byDay] || recurrence.byDay
+    return `every ${recurrence.interval} weeks on ${day}`
+  }
+  if (recurrence.byDay) {
+    const day = dayNames[recurrence.byDay] || recurrence.byDay
+    return `every ${day}`
+  }
+  return recurrence.type || 'recurring'
+}
+
 export default function Home() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [mounted, setMounted] = useState(false)
@@ -232,6 +261,21 @@ export default function Home() {
         console.log('Creating birthday/anniversary with options:', recurrenceOptions)
         addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
       }
+      // For recurring events with "until" date already specified, create directly
+      else if (recurrence.type && recurrence.untilDate) {
+        const recurrenceOptions: RecurrenceOptions = {
+          type: recurrence.type,
+          isBirthday: false,
+          isAnniversary: false,
+          endDate: recurrence.untilDate,
+          interval: recurrence.interval,
+          byDay: recurrence.byDay,
+          byMonthDay: recurrence.byMonthDay,
+          bySetPos: recurrence.bySetPos
+        }
+        console.log('Creating recurring event with until date:', recurrenceOptions)
+        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
+      }
       // For other recurring events, prompt for end date
       else if (recurrence.type && recurrence.needsEndDate) {
         setPendingRecurrence({
@@ -239,6 +283,20 @@ export default function Home() {
           date: result.date,
           recurrence
         })
+      }
+      // Recurring events that don't need end date prompt (shouldn't happen but handle it)
+      else if (recurrence.type) {
+        const recurrenceOptions: RecurrenceOptions = {
+          type: recurrence.type,
+          isBirthday: false,
+          isAnniversary: false,
+          endDate: null,
+          interval: recurrence.interval,
+          byDay: recurrence.byDay,
+          byMonthDay: recurrence.byMonthDay,
+          bySetPos: recurrence.bySetPos
+        }
+        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
       }
       // Non-recurring events
       else {
@@ -263,8 +321,13 @@ export default function Home() {
         type: recurrence.type,
         isBirthday: recurrence.isBirthday,
         isAnniversary: recurrence.isAnniversary,
-        endDate
+        endDate,
+        interval: recurrence.interval,
+        byDay: recurrence.byDay,
+        byMonthDay: recurrence.byMonthDay,
+        bySetPos: recurrence.bySetPos
       }
+      console.log('Creating recurring event with options:', recurrenceOptions)
       addReminderWithDate(text, date, false, undefined, recurrenceOptions)
       setPendingRecurrence(null)
     }
@@ -359,7 +422,7 @@ export default function Home() {
               Click X to delete. To edit, type &quot;update&quot; followed by the event name and new details.
               <br />
               <span className="text-gray-300">
-                Tip: Say &quot;birthday&quot; or &quot;anniversary&quot; for auto-yearly reminders with 1-day advance notice.
+                Recurring: &quot;every Friday&quot;, &quot;alternating Mondays&quot;, &quot;last Saturday of the month&quot;, &quot;until Dec 2026&quot;
               </span>
             </p>
 
@@ -390,6 +453,7 @@ export default function Home() {
       {pendingRecurrence && (
         <RecurrenceEndDateModal
           recurrenceType={pendingRecurrence.recurrence.type || 'yearly'}
+          patternDescription={getPatternDescription(pendingRecurrence.recurrence)}
           onConfirm={handleRecurrenceEndDatePicked}
           onCancel={() => setPendingRecurrence(null)}
         />

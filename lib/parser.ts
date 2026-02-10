@@ -5,6 +5,12 @@ export interface RecurrenceInfo {
   isBirthday: boolean
   isAnniversary: boolean
   needsEndDate: boolean
+  // Advanced patterns
+  interval?: number  // e.g., 2 for "every 2 weeks"
+  byDay?: string  // e.g., "FR" for Friday, "MO" for Monday
+  byMonthDay?: number  // e.g., 20 for "20th of the month"
+  bySetPos?: number  // e.g., -1 for "last", 1 for "first"
+  untilDate?: Date  // parsed "until" date
 }
 
 export interface ParseResult {
@@ -15,8 +21,35 @@ export interface ParseResult {
   recurrence: RecurrenceInfo
 }
 
+const DAY_MAP: Record<string, string> = {
+  'sunday': 'SU', 'sun': 'SU',
+  'monday': 'MO', 'mon': 'MO',
+  'tuesday': 'TU', 'tue': 'TU', 'tues': 'TU',
+  'wednesday': 'WE', 'wed': 'WE',
+  'thursday': 'TH', 'thu': 'TH', 'thur': 'TH', 'thurs': 'TH',
+  'friday': 'FR', 'fri': 'FR',
+  'saturday': 'SA', 'sat': 'SA'
+}
+
+// Parse "until XYZ date" from text
+function parseUntilDate(text: string): Date | undefined {
+  const untilMatch = text.match(/until\s+(.+?)(?:\s*$|,|\.|;)/i)
+  if (untilMatch) {
+    const parsed = chrono.parse(untilMatch[1])
+    if (parsed.length > 0) {
+      return parsed[0].start.date()
+    }
+  }
+  return undefined
+}
+
 // Detect recurrence patterns in text
 function detectRecurrence(text: string): RecurrenceInfo {
+  const lowerText = text.toLowerCase()
+
+  // Parse any "until" date first
+  const untilDate = parseUntilDate(text)
+
   // Check for birthday/anniversary (auto-yearly, no end date needed)
   const isBirthday = /\b(birthday|bday|b-day)\b/i.test(text)
   const isAnniversary = /\b(anniversary|anniversaries)\b/i.test(text)
@@ -30,21 +63,85 @@ function detectRecurrence(text: string): RecurrenceInfo {
     }
   }
 
+  // Check for "every [day]" pattern (e.g., "every Friday", "every Monday")
+  const everyDayMatch = lowerText.match(/every\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\b/i)
+  if (everyDayMatch) {
+    const dayName = everyDayMatch[1].toLowerCase()
+    return {
+      type: 'weekly',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      byDay: DAY_MAP[dayName],
+      untilDate
+    }
+  }
+
+  // Check for "alternating [day]" or "every other [day]" or "every 2 weeks on [day]"
+  const alternatingMatch = lowerText.match(/(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/i)
+  if (alternatingMatch) {
+    const dayName = alternatingMatch[2].toLowerCase()
+    return {
+      type: 'weekly',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      interval: 2,
+      byDay: DAY_MAP[dayName],
+      untilDate
+    }
+  }
+
+  // Check for "day X of the month" or "Xth of every month" (e.g., "day 20 of the month", "15th of every month")
+  const monthDayMatch = lowerText.match(/(?:day\s+(\d{1,2})\s+of\s+(?:the\s+)?month|(\d{1,2})(?:st|nd|rd|th)?\s+of\s+every\s+month|every\s+month\s+on\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?)/i)
+  if (monthDayMatch) {
+    const dayNum = parseInt(monthDayMatch[1] || monthDayMatch[2] || monthDayMatch[3], 10)
+    if (dayNum >= 1 && dayNum <= 31) {
+      return {
+        type: 'monthly',
+        isBirthday: false,
+        isAnniversary: false,
+        needsEndDate: !untilDate,
+        byMonthDay: dayNum,
+        untilDate
+      }
+    }
+  }
+
+  // Check for "last/first [day] of the month" (e.g., "last Saturday of the month", "first Monday of the month")
+  const positionDayMatch = lowerText.match(/(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\s+of\s+(?:the\s+)?month/i)
+  if (positionDayMatch) {
+    const positionMap: Record<string, number> = {
+      'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'last': -1
+    }
+    const position = positionMap[positionDayMatch[1].toLowerCase()]
+    const dayName = positionDayMatch[2].toLowerCase()
+    return {
+      type: 'monthly',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      byDay: DAY_MAP[dayName],
+      bySetPos: position,
+      untilDate
+    }
+  }
+
   // Check for explicit recurrence keywords
   if (/\b(every\s+year|yearly|annual|annually)\b/i.test(text)) {
-    return { type: 'yearly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+    return { type: 'yearly', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
   }
 
   if (/\b(every\s+month|monthly)\b/i.test(text)) {
-    return { type: 'monthly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+    return { type: 'monthly', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
   }
 
   if (/\b(every\s+week|weekly)\b/i.test(text)) {
-    return { type: 'weekly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+    return { type: 'weekly', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
   }
 
   if (/\b(every\s+day|daily)\b/i.test(text)) {
-    return { type: 'daily', isBirthday: false, isAnniversary: false, needsEndDate: true }
+    return { type: 'daily', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
   }
 
   return { type: null, isBirthday: false, isAnniversary: false, needsEndDate: false }
@@ -53,10 +150,23 @@ function detectRecurrence(text: string): RecurrenceInfo {
 // Clean recurrence keywords from title
 function cleanRecurrenceFromTitle(title: string): string {
   return title
+    // Basic patterns
     .replace(/\b(every\s+year|yearly|annual|annually)\b/gi, '')
     .replace(/\b(every\s+month|monthly)\b/gi, '')
     .replace(/\b(every\s+week|weekly)\b/gi, '')
     .replace(/\b(every\s+day|daily)\b/gi, '')
+    // Every [day] pattern
+    .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\b/gi, '')
+    // Alternating patterns
+    .replace(/\b(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
+    // Day X of month patterns
+    .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?month\b/gi, '')
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)?\s+of\s+every\s+month\b/gi, '')
+    .replace(/\bevery\s+month\s+on\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?\b/gi, '')
+    // Position day of month patterns
+    .replace(/\b(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\s+of\s+(?:the\s+)?month\b/gi, '')
+    // Until date pattern
+    .replace(/\buntil\s+.+?(?:\s*$|,|\.|;)/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }

@@ -102,6 +102,11 @@ export interface RecurrenceOptions {
   isBirthday: boolean
   isAnniversary: boolean
   endDate?: Date | null  // null means forever (for birthdays)
+  // Advanced patterns
+  interval?: number  // e.g., 2 for "every 2 weeks"
+  byDay?: string  // e.g., "FR" for Friday, "MO" for Monday
+  byMonthDay?: number  // e.g., 20 for "20th of the month"
+  bySetPos?: number  // e.g., -1 for "last", 1 for "first"
 }
 
 // Build RRULE string for Google Calendar
@@ -116,6 +121,29 @@ function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   }
 
   let rule = `RRULE:FREQ=${freqMap[options.type]}`
+
+  // Add interval if specified (e.g., every 2 weeks)
+  if (options.interval && options.interval > 1) {
+    rule += `;INTERVAL=${options.interval}`
+  }
+
+  // Add BYDAY if specified (e.g., FR for Friday)
+  if (options.byDay) {
+    rule += `;BYDAY=${options.byDay}`
+  }
+
+  // Add BYMONTHDAY if specified (e.g., 20 for day 20 of month)
+  if (options.byMonthDay) {
+    rule += `;BYMONTHDAY=${options.byMonthDay}`
+  }
+
+  // Add BYSETPOS if specified (e.g., -1 for last occurrence)
+  // Note: BYSETPOS requires BYDAY to be set for "last Saturday of month" pattern
+  if (options.bySetPos && options.byDay) {
+    // For BYSETPOS, we need to restructure: BYDAY=SA;BYSETPOS=-1 doesn't work
+    // Instead use: BYDAY=-1SA (last Saturday)
+    rule = rule.replace(`;BYDAY=${options.byDay}`, `;BYDAY=${options.bySetPos}${options.byDay}`)
+  }
 
   // Add end date if specified (not for birthdays/anniversaries which go forever)
   if (options.endDate && !options.isBirthday && !options.isAnniversary) {

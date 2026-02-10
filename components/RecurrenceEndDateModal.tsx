@@ -4,12 +4,14 @@ import { useState } from 'react'
 
 interface RecurrenceEndDateModalProps {
   recurrenceType: string
+  patternDescription?: string
   onConfirm: (endDate: Date | null) => void
   onCancel: () => void
 }
 
 export default function RecurrenceEndDateModal({
   recurrenceType,
+  patternDescription,
   onConfirm,
   onCancel
 }: RecurrenceEndDateModalProps) {
@@ -25,6 +27,7 @@ export default function RecurrenceEndDateModal({
   }
 
   const getTypeLabel = () => {
+    if (patternDescription) return patternDescription
     switch (recurrenceType) {
       case 'yearly': return 'yearly'
       case 'monthly': return 'monthly'

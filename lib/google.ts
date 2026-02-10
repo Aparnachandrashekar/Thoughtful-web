@@ -97,11 +97,77 @@ export function getRemindersKey(): string {
   return userEmail ? `thoughtful-reminders-${userEmail}` : 'thoughtful-reminders'
 }
 
+export interface RecurrenceOptions {
+  type: 'yearly' | 'monthly' | 'weekly' | 'daily' | null
+  isBirthday: boolean
+  isAnniversary: boolean
+  endDate?: Date | null  // null means forever (for birthdays)
+}
+
+// Build RRULE string for Google Calendar
+function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
+  if (!options.type) return undefined
+
+  const freqMap = {
+    yearly: 'YEARLY',
+    monthly: 'MONTHLY',
+    weekly: 'WEEKLY',
+    daily: 'DAILY'
+  }
+
+  let rule = `RRULE:FREQ=${freqMap[options.type]}`
+
+  // Add end date if specified (not for birthdays/anniversaries which go forever)
+  if (options.endDate && !options.isBirthday && !options.isAnniversary) {
+    const until = options.endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+    rule += `;UNTIL=${until}`
+  }
+
+  return [rule]
+}
+
 export async function createCalendarEvent(event: {
   title: string
   date: string
+  recurrence?: RecurrenceOptions
 }) {
   if (!accessToken) throw new Error('Not signed in')
+
+  // Get user's timezone
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  // Build reminders - for birthdays, add 1 day before + at event time
+  const reminders = event.recurrence?.isBirthday || event.recurrence?.isAnniversary
+    ? {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 1440 },  // 1 day before
+          { method: 'popup', minutes: 0 },      // At event time
+        ],
+      }
+    : {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 10 },
+        ],
+      }
+
+  const eventBody: Record<string, unknown> = {
+    summary: event.title,
+    start: { dateTime: event.date, timeZone },
+    end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString(), timeZone },
+    reminders,
+  }
+
+  // Add recurrence rule if applicable
+  if (event.recurrence) {
+    const recurrence = buildRecurrenceRule(event.recurrence)
+    if (recurrence) {
+      eventBody.recurrence = recurrence
+    }
+  }
+
+  console.log('Creating calendar event:', JSON.stringify(eventBody, null, 2))
 
   const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
     method: 'POST',
@@ -109,21 +175,12 @@ export async function createCalendarEvent(event: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      summary: event.title,
-      start: { dateTime: event.date },
-      end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 10 },
-        ],
-      },
-    }),
+    body: JSON.stringify(eventBody),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
+    console.error('Calendar API error:', err)
     throw new Error(err.error?.message || 'Failed to create event')
   }
 

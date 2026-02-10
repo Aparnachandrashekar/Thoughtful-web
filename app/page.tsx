@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
-import { parseReminder } from '@/lib/parser'
+import RecurrenceEndDateModal from '@/components/RecurrenceEndDateModal'
+import { parseReminder, RecurrenceInfo } from '@/lib/parser'
 import {
   initGoogleAuth,
   signIn,
@@ -14,7 +15,8 @@ import {
   getRemindersKey,
   createCalendarEvent,
   updateCalendarEvent,
-  deleteCalendarEvent
+  deleteCalendarEvent,
+  RecurrenceOptions
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
@@ -28,6 +30,13 @@ export default function Home() {
 
   // For date picker fallback
   const [pendingText, setPendingText] = useState<string | null>(null)
+
+  // For recurrence end date prompt
+  const [pendingRecurrence, setPendingRecurrence] = useState<{
+    text: string
+    date: Date
+    recurrence: RecurrenceInfo
+  } | null>(null)
 
   // Load reminders for current user
   const loadReminders = useCallback(() => {
@@ -108,7 +117,13 @@ export default function Home() {
     setTimeout(() => setStatus(null), 2000)
   }
 
-  const addReminderWithDate = useCallback(async (text: string, date: Date, isUpdate = false, existingReminder?: Reminder) => {
+  const addReminderWithDate = useCallback(async (
+    text: string,
+    date: Date,
+    isUpdate = false,
+    existingReminder?: Reminder,
+    recurrenceOptions?: RecurrenceOptions
+  ) => {
     const id = existingReminder?.id || Date.now().toString()
     const friendlyTitle = await generateTitle(text)
 
@@ -118,6 +133,9 @@ export default function Home() {
       date,
       isCompleted: false,
       calendarEventId: existingReminder?.calendarEventId,
+      isRecurring: !!recurrenceOptions?.type,
+      isBirthday: recurrenceOptions?.isBirthday,
+      isAnniversary: recurrenceOptions?.isAnniversary,
     }
 
     if (isUpdate && existingReminder) {
@@ -137,17 +155,31 @@ export default function Home() {
           })
           setStatus('Calendar event updated')
         } else {
-          setStatus('Creating calendar event...')
-          const result = await createCalendarEvent({ title: friendlyTitle, date: date.toISOString() })
+          const statusMsg = recurrenceOptions?.type
+            ? `Creating recurring ${recurrenceOptions.isBirthday ? 'birthday' : recurrenceOptions.isAnniversary ? 'anniversary' : ''} event...`
+            : 'Creating calendar event...'
+          setStatus(statusMsg)
+          const result = await createCalendarEvent({
+            title: friendlyTitle,
+            date: date.toISOString(),
+            recurrence: recurrenceOptions
+          })
           // Store the calendar event ID
           if (result?.id) {
             setReminders(prev => prev.map(r =>
               r.id === id ? { ...r, calendarEventId: result.id } : r
             ))
           }
-          setStatus('Calendar event created')
+          const successMsg = recurrenceOptions?.isBirthday
+            ? 'Birthday reminder created (yearly, with 1-day advance notice)'
+            : recurrenceOptions?.isAnniversary
+            ? 'Anniversary reminder created (yearly, with 1-day advance notice)'
+            : recurrenceOptions?.type
+            ? `Recurring ${recurrenceOptions.type} event created`
+            : 'Calendar event created'
+          setStatus(successMsg)
         }
-        setTimeout(() => setStatus(null), 2000)
+        setTimeout(() => setStatus(null), 3000)
       } catch {
         setStatus('Saved locally (calendar sync failed)')
         setTimeout(() => setStatus(null), 3000)
@@ -183,9 +215,35 @@ export default function Home() {
     }
 
     const result = parseReminder(text)
+    console.log('Parse result:', result)
 
     if (result.date) {
-      addReminderWithDate(result.title, result.date)
+      const { recurrence } = result
+      console.log('Recurrence detected:', recurrence)
+
+      // For birthdays/anniversaries, auto-create as yearly recurring (no end date prompt)
+      if (recurrence.isBirthday || recurrence.isAnniversary) {
+        const recurrenceOptions: RecurrenceOptions = {
+          type: 'yearly',
+          isBirthday: recurrence.isBirthday,
+          isAnniversary: recurrence.isAnniversary,
+          endDate: null  // Forever
+        }
+        console.log('Creating birthday/anniversary with options:', recurrenceOptions)
+        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
+      }
+      // For other recurring events, prompt for end date
+      else if (recurrence.type && recurrence.needsEndDate) {
+        setPendingRecurrence({
+          text: result.title,
+          date: result.date,
+          recurrence
+        })
+      }
+      // Non-recurring events
+      else {
+        addReminderWithDate(result.title, result.date)
+      }
     } else {
       setPendingText(text)
     }
@@ -195,6 +253,20 @@ export default function Home() {
     if (pendingText) {
       addReminderWithDate(pendingText, date)
       setPendingText(null)
+    }
+  }
+
+  const handleRecurrenceEndDatePicked = (endDate: Date | null) => {
+    if (pendingRecurrence) {
+      const { text, date, recurrence } = pendingRecurrence
+      const recurrenceOptions: RecurrenceOptions = {
+        type: recurrence.type,
+        isBirthday: recurrence.isBirthday,
+        isAnniversary: recurrence.isAnniversary,
+        endDate
+      }
+      addReminderWithDate(text, date, false, undefined, recurrenceOptions)
+      setPendingRecurrence(null)
     }
   }
 
@@ -285,6 +357,10 @@ export default function Home() {
             {/* Help text */}
             <p className="text-center text-sm text-gray-400 mb-6">
               Click X to delete. To edit, type &quot;update&quot; followed by the event name and new details.
+              <br />
+              <span className="text-gray-300">
+                Tip: Say &quot;birthday&quot; or &quot;anniversary&quot; for auto-yearly reminders with 1-day advance notice.
+              </span>
             </p>
 
             {/* Reminder List */}
@@ -307,6 +383,15 @@ export default function Home() {
           text={pendingText}
           onConfirm={handleDatePicked}
           onCancel={() => setPendingText(null)}
+        />
+      )}
+
+      {/* Recurrence End Date Modal */}
+      {pendingRecurrence && (
+        <RecurrenceEndDateModal
+          recurrenceType={pendingRecurrence.recurrence.type || 'yearly'}
+          onConfirm={handleRecurrenceEndDatePicked}
+          onCancel={() => setPendingRecurrence(null)}
         />
       )}
     </main>

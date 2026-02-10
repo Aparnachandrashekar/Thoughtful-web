@@ -1,10 +1,64 @@
 import * as chrono from 'chrono-node'
 
+export interface RecurrenceInfo {
+  type: 'yearly' | 'monthly' | 'weekly' | 'daily' | null
+  isBirthday: boolean
+  isAnniversary: boolean
+  needsEndDate: boolean
+}
+
 export interface ParseResult {
   title: string
   date: Date | null
   needsTimeConfirmation?: boolean
   suggestedHour?: number
+  recurrence: RecurrenceInfo
+}
+
+// Detect recurrence patterns in text
+function detectRecurrence(text: string): RecurrenceInfo {
+  // Check for birthday/anniversary (auto-yearly, no end date needed)
+  const isBirthday = /\b(birthday|bday|b-day)\b/i.test(text)
+  const isAnniversary = /\b(anniversary|anniversaries)\b/i.test(text)
+
+  if (isBirthday || isAnniversary) {
+    return {
+      type: 'yearly',
+      isBirthday,
+      isAnniversary,
+      needsEndDate: false
+    }
+  }
+
+  // Check for explicit recurrence keywords
+  if (/\b(every\s+year|yearly|annual|annually)\b/i.test(text)) {
+    return { type: 'yearly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+  }
+
+  if (/\b(every\s+month|monthly)\b/i.test(text)) {
+    return { type: 'monthly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+  }
+
+  if (/\b(every\s+week|weekly)\b/i.test(text)) {
+    return { type: 'weekly', isBirthday: false, isAnniversary: false, needsEndDate: true }
+  }
+
+  if (/\b(every\s+day|daily)\b/i.test(text)) {
+    return { type: 'daily', isBirthday: false, isAnniversary: false, needsEndDate: true }
+  }
+
+  return { type: null, isBirthday: false, isAnniversary: false, needsEndDate: false }
+}
+
+// Clean recurrence keywords from title
+function cleanRecurrenceFromTitle(title: string): string {
+  return title
+    .replace(/\b(every\s+year|yearly|annual|annually)\b/gi, '')
+    .replace(/\b(every\s+month|monthly)\b/gi, '')
+    .replace(/\b(every\s+week|weekly)\b/gi, '')
+    .replace(/\b(every\s+day|daily)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 // Preprocess text to handle negations and complex patterns
@@ -52,13 +106,16 @@ function fixAmbiguousHour(date: Date, hasExplicitMeridiem: boolean): { date: Dat
 }
 
 export function parseReminder(text: string): ParseResult {
+  // Detect recurrence first
+  const recurrence = detectRecurrence(text)
+
   // Preprocess to handle negations
   const processedText = preprocessText(text)
 
   const parsed = chrono.parse(processedText)
 
   if (parsed.length === 0) {
-    return { title: text, date: null }
+    return { title: text, date: null, recurrence }
   }
 
   const result = parsed[0]
@@ -90,8 +147,12 @@ export function parseReminder(text: string): ParseResult {
   // Clean up common leftover words
   title = title.replace(/^(at|on|for|by)\s+/i, '').trim()
 
+  // Clean recurrence keywords from title
+  title = cleanRecurrenceFromTitle(title)
+
   return {
     title: title || text,
     date,
+    recurrence,
   }
 }

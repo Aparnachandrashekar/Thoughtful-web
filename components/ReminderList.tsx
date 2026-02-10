@@ -6,6 +6,9 @@ export interface Reminder {
   date: Date
   isCompleted: boolean
   calendarEventId?: string
+  isRecurring?: boolean
+  isBirthday?: boolean
+  isAnniversary?: boolean
 }
 
 interface ReminderListProps {
@@ -82,7 +85,14 @@ export default function ReminderList({ reminders, onToggle, onDelete }: Reminder
                                hover:border-gray-600 transition-colors flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-gray-800 font-medium">{reminder.text}</p>
+                    <p className="text-gray-800 font-medium">
+                      {reminder.text}
+                      {reminder.isRecurring && (
+                        <span className="ml-2 text-xs text-gray-400" title="Recurring event">
+                          {reminder.isBirthday ? '🎂' : reminder.isAnniversary ? '💝' : '🔄'}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500 mt-1">{formatDate(reminder.date)}</p>
                   </div>
                   <button

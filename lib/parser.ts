@@ -11,6 +11,8 @@ export interface RecurrenceInfo {
   byMonthDay?: number  // e.g., 20 for "20th of the month"
   bySetPos?: number  // e.g., -1 for "last", 1 for "first"
   untilDate?: Date  // parsed "until" date
+  // For patterns where we calculate the date ourselves
+  calculatedDate?: Date
 }
 
 export interface ParseResult {
@@ -29,6 +31,93 @@ const DAY_MAP: Record<string, string> = {
   'thursday': 'TH', 'thu': 'TH', 'thur': 'TH', 'thurs': 'TH',
   'friday': 'FR', 'fri': 'FR',
   'saturday': 'SA', 'sat': 'SA'
+}
+
+const DAY_TO_NUM: Record<string, number> = {
+  'sunday': 0, 'sun': 0,
+  'monday': 1, 'mon': 1,
+  'tuesday': 2, 'tue': 2, 'tues': 2,
+  'wednesday': 3, 'wed': 3,
+  'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
+  'friday': 5, 'fri': 5,
+  'saturday': 6, 'sat': 6
+}
+
+// Get next occurrence of a specific weekday
+function getNextWeekday(dayNum: number): Date {
+  const today = new Date()
+  const currentDay = today.getDay()
+  let daysUntil = dayNum - currentDay
+  if (daysUntil <= 0) daysUntil += 7  // Next week if today or past
+  const result = new Date(today)
+  result.setDate(today.getDate() + daysUntil)
+  result.setHours(8, 0, 0, 0)  // Default 8 AM
+  return result
+}
+
+// Get the Nth occurrence of a weekday in a month (or last if position is -1)
+function getNthWeekdayOfMonth(dayNum: number, position: number, referenceDate?: Date): Date {
+  const today = referenceDate || new Date()
+  let year = today.getFullYear()
+  let month = today.getMonth()
+
+  // Start with current month, but if the date has passed, use next month
+  let result = calculateNthWeekday(year, month, dayNum, position)
+
+  // If the calculated date is in the past, try next month
+  if (result <= today) {
+    month++
+    if (month > 11) {
+      month = 0
+      year++
+    }
+    result = calculateNthWeekday(year, month, dayNum, position)
+  }
+
+  result.setHours(8, 0, 0, 0)
+  return result
+}
+
+function calculateNthWeekday(year: number, month: number, dayNum: number, position: number): Date {
+  if (position === -1) {
+    // Last occurrence of the weekday in the month
+    const lastDay = new Date(year, month + 1, 0)  // Last day of month
+    const lastDayOfWeek = lastDay.getDay()
+    let diff = lastDayOfWeek - dayNum
+    if (diff < 0) diff += 7
+    return new Date(year, month, lastDay.getDate() - diff)
+  } else {
+    // Nth occurrence (1st, 2nd, 3rd, 4th)
+    const firstDay = new Date(year, month, 1)
+    const firstDayOfWeek = firstDay.getDay()
+    let diff = dayNum - firstDayOfWeek
+    if (diff < 0) diff += 7
+    const firstOccurrence = 1 + diff
+    const nthOccurrence = firstOccurrence + (position - 1) * 7
+    return new Date(year, month, nthOccurrence)
+  }
+}
+
+// Get next occurrence of a specific day of month
+function getNextMonthDay(dayOfMonth: number): Date {
+  const today = new Date()
+  let year = today.getFullYear()
+  let month = today.getMonth()
+
+  let result = new Date(year, month, dayOfMonth)
+
+  // If this day has passed this month, use next month
+  if (result <= today) {
+    month++
+    if (month > 11) {
+      month = 0
+      year++
+    }
+    result = new Date(year, month, dayOfMonth)
+  }
+
+  result.setHours(8, 0, 0, 0)
+  return result
 }
 
 // Parse "until XYZ date" from text
@@ -64,16 +153,18 @@ function detectRecurrence(text: string): RecurrenceInfo {
   }
 
   // Check for "every [day]" pattern (e.g., "every Friday", "every Monday")
-  const everyDayMatch = lowerText.match(/every\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\b/i)
+  const everyDayMatch = lowerText.match(/every\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/i)
   if (everyDayMatch) {
     const dayName = everyDayMatch[1].toLowerCase()
+    const dayNum = DAY_TO_NUM[dayName]
     return {
       type: 'weekly',
       isBirthday: false,
       isAnniversary: false,
       needsEndDate: !untilDate,
       byDay: DAY_MAP[dayName],
-      untilDate
+      untilDate,
+      calculatedDate: getNextWeekday(dayNum)
     }
   }
 
@@ -81,6 +172,7 @@ function detectRecurrence(text: string): RecurrenceInfo {
   const alternatingMatch = lowerText.match(/(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/i)
   if (alternatingMatch) {
     const dayName = alternatingMatch[2].toLowerCase()
+    const dayNum = DAY_TO_NUM[dayName]
     return {
       type: 'weekly',
       isBirthday: false,
@@ -88,12 +180,35 @@ function detectRecurrence(text: string): RecurrenceInfo {
       needsEndDate: !untilDate,
       interval: 2,
       byDay: DAY_MAP[dayName],
-      untilDate
+      untilDate,
+      calculatedDate: getNextWeekday(dayNum)
+    }
+  }
+
+  // Check for "last/first [day] of the month" BEFORE general day matching
+  // (e.g., "last Saturday of the month", "first Monday of the month")
+  const positionDayMatch = lowerText.match(/(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)(?:day)?\s+of\s+(?:the\s+)?(?:every\s+)?month/i)
+  if (positionDayMatch) {
+    const positionMap: Record<string, number> = {
+      'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'last': -1
+    }
+    const position = positionMap[positionDayMatch[1].toLowerCase()]
+    const dayName = positionDayMatch[2].toLowerCase()
+    const dayNum = DAY_TO_NUM[dayName]
+    return {
+      type: 'monthly',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      byDay: DAY_MAP[dayName],
+      bySetPos: position,
+      untilDate,
+      calculatedDate: getNthWeekdayOfMonth(dayNum, position)
     }
   }
 
   // Check for "day X of the month" or "Xth of every month" (e.g., "day 20 of the month", "15th of every month")
-  const monthDayMatch = lowerText.match(/(?:day\s+(\d{1,2})\s+of\s+(?:the\s+)?month|(\d{1,2})(?:st|nd|rd|th)?\s+of\s+every\s+month|every\s+month\s+on\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?)/i)
+  const monthDayMatch = lowerText.match(/(?:day\s+(\d{1,2})\s+of\s+(?:the\s+)?(?:every\s+)?month|(\d{1,2})(?:st|nd|rd|th)?\s+of\s+every\s+month|every\s+month\s+on\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?)/i)
   if (monthDayMatch) {
     const dayNum = parseInt(monthDayMatch[1] || monthDayMatch[2] || monthDayMatch[3], 10)
     if (dayNum >= 1 && dayNum <= 31) {
@@ -103,27 +218,9 @@ function detectRecurrence(text: string): RecurrenceInfo {
         isAnniversary: false,
         needsEndDate: !untilDate,
         byMonthDay: dayNum,
-        untilDate
+        untilDate,
+        calculatedDate: getNextMonthDay(dayNum)
       }
-    }
-  }
-
-  // Check for "last/first [day] of the month" (e.g., "last Saturday of the month", "first Monday of the month")
-  const positionDayMatch = lowerText.match(/(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\s+of\s+(?:the\s+)?month/i)
-  if (positionDayMatch) {
-    const positionMap: Record<string, number> = {
-      'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'last': -1
-    }
-    const position = positionMap[positionDayMatch[1].toLowerCase()]
-    const dayName = positionDayMatch[2].toLowerCase()
-    return {
-      type: 'monthly',
-      isBirthday: false,
-      isAnniversary: false,
-      needsEndDate: !untilDate,
-      byDay: DAY_MAP[dayName],
-      bySetPos: position,
-      untilDate
     }
   }
 
@@ -155,16 +252,16 @@ function cleanRecurrenceFromTitle(title: string): string {
     .replace(/\b(every\s+month|monthly)\b/gi, '')
     .replace(/\b(every\s+week|weekly)\b/gi, '')
     .replace(/\b(every\s+day|daily)\b/gi, '')
-    // Every [day] pattern
-    .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\b/gi, '')
+    // Every [day] pattern (with optional 's' at end)
+    .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
     // Alternating patterns
     .replace(/\b(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
     // Day X of month patterns
-    .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?month\b/gi, '')
+    .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')
     .replace(/\b\d{1,2}(?:st|nd|rd|th)?\s+of\s+every\s+month\b/gi, '')
     .replace(/\bevery\s+month\s+on\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?\b/gi, '')
-    // Position day of month patterns
-    .replace(/\b(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\s+of\s+(?:the\s+)?month\b/gi, '')
+    // Position day of month patterns (with optional 'day' suffix like 'saturday' vs 'sat')
+    .replace(/\b(last|first|second|third|fourth)\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)(?:day)?\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')
     // Until date pattern
     .replace(/\buntil\s+.+?(?:\s*$|,|\.|;)/gi, '')
     .replace(/\s{2,}/g, ' ')
@@ -215,9 +312,60 @@ function fixAmbiguousHour(date: Date, hasExplicitMeridiem: boolean): { date: Dat
   return { date, needsConfirmation: false }
 }
 
+// Extract a clean, meaningful title from the input text
+function extractTitle(text: string): string {
+  let title = text
+
+  // Remove common date/time phrases
+  title = title
+    // Time patterns
+    .replace(/\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, '')
+    .replace(/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/gi, '')
+    // Relative dates
+    .replace(/\b(today|tonight|tomorrow|yesterday)\b/gi, '')
+    .replace(/\b(this|next|last)\s+(week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, '')
+    // Specific dates
+    .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(st|nd|rd|th)?(,?\s+\d{4})?\b/gi, '')
+    .replace(/\b\d{1,2}(st|nd|rd|th)?\s+(of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\b/gi, '')
+    .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, '')
+    // Day names
+    .replace(/\b(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, '')
+    // Filler words at start
+    .replace(/^(is|it's|it is|that|remind me to|remind me that|reminder|remember to|remember that|don't forget to|don't forget)\s+/i, '')
+    // Filler words anywhere
+    .replace(/\b(is on|is at|is|are)\b/gi, '')
+
+  // Clean recurrence patterns from title
+  title = cleanRecurrenceFromTitle(title)
+
+  // Clean up
+  title = title
+    .replace(/^[\s,.\-:]+/, '')  // Remove leading punctuation
+    .replace(/[\s,.\-:]+$/, '')  // Remove trailing punctuation
+    .replace(/\s{2,}/g, ' ')     // Collapse multiple spaces
+    .trim()
+
+  // Capitalize first letter
+  if (title.length > 0) {
+    title = title.charAt(0).toUpperCase() + title.slice(1)
+  }
+
+  return title
+}
+
 export function parseReminder(text: string): ParseResult {
-  // Detect recurrence first
+  // Detect recurrence first - this may calculate the date for us
   const recurrence = detectRecurrence(text)
+
+  // If recurrence detection calculated a date, use that
+  if (recurrence.calculatedDate) {
+    const title = extractTitle(text)
+    return {
+      title: title || text,
+      date: recurrence.calculatedDate,
+      recurrence,
+    }
+  }
 
   // Preprocess to handle negations
   const processedText = preprocessText(text)
@@ -225,7 +373,9 @@ export function parseReminder(text: string): ParseResult {
   const parsed = chrono.parse(processedText)
 
   if (parsed.length === 0) {
-    return { title: text, date: null, recurrence }
+    // No date found - extract title anyway for the date picker modal
+    const title = extractTitle(text)
+    return { title: title || text, date: null, recurrence }
   }
 
   const result = parsed[0]
@@ -245,20 +395,8 @@ export function parseReminder(text: string): ParseResult {
     date = fixed.date
   }
 
-  // Remove the date/time portion from the text to get a clean title
-  // Use original text for title extraction
-  const dateText = result.text
-  let title = text
-    .replace(new RegExp(dateText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '')
-    .replace(/not\s+(today|tomorrow)[,]?\s*(but\s+)?/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-
-  // Clean up common leftover words
-  title = title.replace(/^(at|on|for|by)\s+/i, '').trim()
-
-  // Clean recurrence keywords from title
-  title = cleanRecurrenceFromTitle(title)
+  // Extract clean title
+  const title = extractTitle(text)
 
   return {
     title: title || text,

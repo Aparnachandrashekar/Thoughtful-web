@@ -5,7 +5,17 @@ import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
 import { parseReminder } from '@/lib/parser'
-import { initGoogleAuth, signIn, isSignedIn, createCalendarEvent, deleteCalendarEvent } from '@/lib/google'
+import {
+  initGoogleAuth,
+  signIn,
+  signOut,
+  isSignedIn,
+  getUserEmail,
+  getRemindersKey,
+  createCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent
+} from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
 export default function Home() {
@@ -13,25 +23,36 @@ export default function Home() {
   const [mounted, setMounted] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
   // For date picker fallback
   const [pendingText, setPendingText] = useState<string | null>(null)
 
-  useEffect(() => {
-    setMounted(true)
-    // Load saved reminders from localStorage
+  // Load reminders for current user
+  const loadReminders = useCallback(() => {
     try {
-      const saved = localStorage.getItem('thoughtful-reminders')
+      const key = getRemindersKey()
+      const saved = localStorage.getItem(key)
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) {
           setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
+          return
         }
       }
-    } catch {
-      localStorage.removeItem('thoughtful-reminders')
-    }
+    } catch {}
+    setReminders([])
+  }, [])
+
+  // Save reminders for current user
+  const saveReminders = useCallback((newReminders: Reminder[]) => {
+    const key = getRemindersKey()
+    localStorage.setItem(key, JSON.stringify(newReminders))
+  }, [])
+
+  useEffect(() => {
+    setMounted(true)
     // Init Google auth
     try {
       const script = document.createElement('script')
@@ -42,7 +63,11 @@ export default function Home() {
         if (clientId) {
           initGoogleAuth(clientId)
           setGoogleReady(true)
-          setSignedIn(isSignedIn())
+          // Check if already signed in (from localStorage)
+          if (isSignedIn()) {
+            setSignedIn(true)
+            setUserEmail(getUserEmail())
+          }
         }
       }
       document.head.appendChild(script)
@@ -51,25 +76,40 @@ export default function Home() {
     }
   }, [])
 
-  // Persist reminders to localStorage
+  // Load reminders when user changes or on mount
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem('thoughtful-reminders', JSON.stringify(reminders))
+      loadReminders()
     }
-  }, [reminders, mounted])
+  }, [mounted, userEmail, loadReminders])
+
+  // Persist reminders to localStorage when they change
+  useEffect(() => {
+    if (mounted && reminders.length >= 0) {
+      saveReminders(reminders)
+    }
+  }, [reminders, mounted, saveReminders])
 
   const handleGoogleSignIn = () => {
-    signIn(() => {
+    signIn((email) => {
       setSignedIn(true)
-      setStatus('Signed in to Google')
+      setUserEmail(email)
+      setStatus(`Signed in as ${email}`)
       setTimeout(() => setStatus(null), 2000)
     })
   }
 
-  const addReminderWithDate = useCallback(async (text: string, date: Date) => {
-    const id = Date.now().toString()
+  const handleGoogleSignOut = () => {
+    signOut()
+    setSignedIn(false)
+    setUserEmail(null)
+    setReminders([])
+    setStatus('Signed out')
+    setTimeout(() => setStatus(null), 2000)
+  }
 
-    // Generate a friendly title (AI or heuristic)
+  const addReminderWithDate = useCallback(async (text: string, date: Date, isUpdate = false, existingReminder?: Reminder) => {
+    const id = existingReminder?.id || Date.now().toString()
     const friendlyTitle = await generateTitle(text)
 
     const newReminder: Reminder = {
@@ -77,16 +117,36 @@ export default function Home() {
       text: friendlyTitle,
       date,
       isCompleted: false,
+      calendarEventId: existingReminder?.calendarEventId,
     }
 
-    setReminders(prev => [newReminder, ...prev])
+    if (isUpdate && existingReminder) {
+      setReminders(prev => prev.map(r => r.id === id ? newReminder : r))
+    } else {
+      setReminders(prev => [newReminder, ...prev])
+    }
 
-    // Create Google Calendar event if signed in
+    // Sync with Google Calendar if signed in
     if (isSignedIn()) {
       try {
-        setStatus('Creating calendar event...')
-        await createCalendarEvent({ title: friendlyTitle, date: date.toISOString() })
-        setStatus('Calendar event created')
+        if (isUpdate && existingReminder?.calendarEventId) {
+          setStatus('Updating calendar event...')
+          await updateCalendarEvent(existingReminder.calendarEventId, {
+            title: friendlyTitle,
+            date: date.toISOString()
+          })
+          setStatus('Calendar event updated')
+        } else {
+          setStatus('Creating calendar event...')
+          const result = await createCalendarEvent({ title: friendlyTitle, date: date.toISOString() })
+          // Store the calendar event ID
+          if (result?.id) {
+            setReminders(prev => prev.map(r =>
+              r.id === id ? { ...r, calendarEventId: result.id } : r
+            ))
+          }
+          setStatus('Calendar event created')
+        }
         setTimeout(() => setStatus(null), 2000)
       } catch {
         setStatus('Saved locally (calendar sync failed)')
@@ -99,13 +159,34 @@ export default function Home() {
   }, [])
 
   const handleAddReminder = (text: string) => {
+    // Check if this is an update request
+    const lowerText = text.toLowerCase()
+    const isUpdateRequest = lowerText.includes('update')
+
+    if (isUpdateRequest) {
+      // Find matching reminder by keyword
+      const cleanText = text.replace(/update/gi, '').trim()
+      const existingReminder = reminders.find(r =>
+        r.text.toLowerCase().includes(cleanText.toLowerCase()) ||
+        cleanText.toLowerCase().includes(r.text.toLowerCase().split(' ').slice(0, 3).join(' '))
+      )
+
+      if (existingReminder) {
+        const result = parseReminder(cleanText)
+        if (result.date) {
+          addReminderWithDate(result.title, result.date, true, existingReminder)
+        } else {
+          setPendingText(cleanText)
+        }
+        return
+      }
+    }
+
     const result = parseReminder(text)
 
     if (result.date) {
-      // Parsing succeeded — create reminder directly
       addReminderWithDate(result.title, result.date)
     } else {
-      // Parsing failed — show date picker
       setPendingText(text)
     }
   }
@@ -170,9 +251,17 @@ export default function Home() {
               Sign in with Google
             </button>
           ) : signedIn ? (
-            <span className="text-sm text-green-600 font-medium">
-              Connected to Google Calendar
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-green-600 font-medium">
+                {userEmail}
+              </span>
+              <button
+                onClick={handleGoogleSignOut}
+                className="text-sm text-gray-500 hover:text-gray-700 underline"
+              >
+                Sign out
+              </button>
+            </div>
           ) : null}
         </div>
 

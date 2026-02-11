@@ -147,14 +147,14 @@ export default function Home() {
   }
 
   const addReminderWithDate = useCallback(async (
-    text: string,
+    rawText: string,  // Original user input for AI title generation
     date: Date,
     isUpdate = false,
     existingReminder?: Reminder,
     recurrenceOptions?: RecurrenceOptions
   ) => {
     const id = existingReminder?.id || Date.now().toString()
-    const friendlyTitle = await generateTitle(text)
+    const friendlyTitle = await generateTitle(rawText)
 
     const newReminder: Reminder = {
       id,
@@ -235,7 +235,7 @@ export default function Home() {
       if (existingReminder) {
         const result = parseReminder(cleanText)
         if (result.date) {
-          addReminderWithDate(result.title, result.date, true, existingReminder)
+          addReminderWithDate(cleanText, result.date, true, existingReminder)
         } else {
           setPendingText(cleanText)
         }
@@ -259,7 +259,7 @@ export default function Home() {
           endDate: null  // Forever
         }
         console.log('Creating birthday/anniversary with options:', recurrenceOptions)
-        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
+        addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
       // For recurring events with "until" date already specified, create directly
       else if (recurrence.type && recurrence.untilDate) {
@@ -274,12 +274,12 @@ export default function Home() {
           bySetPos: recurrence.bySetPos
         }
         console.log('Creating recurring event with until date:', recurrenceOptions)
-        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
+        addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
       // For other recurring events, prompt for end date
       else if (recurrence.type && recurrence.needsEndDate) {
         setPendingRecurrence({
-          text: result.title,
+          text: text,  // Store original text for AI title generation
           date: result.date,
           recurrence
         })
@@ -296,11 +296,11 @@ export default function Home() {
           byMonthDay: recurrence.byMonthDay,
           bySetPos: recurrence.bySetPos
         }
-        addReminderWithDate(result.title, result.date, false, undefined, recurrenceOptions)
+        addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
       // Non-recurring events
       else {
-        addReminderWithDate(result.title, result.date)
+        addReminderWithDate(text, result.date)
       }
     } else {
       setPendingText(text)

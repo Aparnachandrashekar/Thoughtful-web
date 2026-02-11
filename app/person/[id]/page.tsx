@@ -8,8 +8,13 @@ import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate } from '@/lib/types'
 import { getPersonById, linkReminderToPerson } from '@/lib/people'
-import { getRemindersKey, getUserEmail, isSignedIn, createCalendarEvent, RecurrenceOptions } from '@/lib/google'
+import { getRemindersKey, getUserEmail, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
+
+function getCardColor(index: number): string {
+  const colors = ['bg-blush/40', 'bg-lavender/40', 'bg-mint/40', 'bg-peach/40', 'bg-sky/40']
+  return colors[index % colors.length]
+}
 
 export default function PersonProfilePage() {
   const params = useParams()
@@ -49,13 +54,22 @@ export default function PersonProfilePage() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
+  const refreshReminders = useCallback(() => {
+    const loadedPerson = getPersonById(personId, userEmail || undefined)
+    if (loadedPerson) {
+      const allReminders = loadReminders()
+      const linkedReminders = allReminders.filter((r: Reminder) =>
+        loadedPerson.linkedReminderIds.includes(r.id) ||
+        r.text.toLowerCase().includes(loadedPerson.name.toLowerCase())
+      )
+      setReminders(linkedReminders)
+    }
+  }, [personId, userEmail, loadReminders])
+
   useEffect(() => {
-    // Load person data
     const loadedPerson = getPersonById(personId, userEmail || undefined)
     if (loadedPerson) {
       setPerson(loadedPerson)
-
-      // Load and filter reminders for this person
       const allReminders = loadReminders()
       const linkedReminders = allReminders.filter((r: Reminder) =>
         loadedPerson.linkedReminderIds.includes(r.id) ||
@@ -65,12 +79,37 @@ export default function PersonProfilePage() {
     } else {
       setError('Person not found')
     }
-
     setIsLoading(false)
   }, [personId, userEmail, loadReminders])
 
   const handleSelectTemplate = (template: CareTemplate, generatedText: string) => {
     setTemplateModal({ template, generatedText })
+  }
+
+  const handleDelete = async (id: string) => {
+    const reminder = reminders.find(r => r.id === id)
+
+    // Delete from Google Calendar if signed in
+    if (reminder?.calendarEventId && isSignedIn()) {
+      try {
+        setStatus('Removing from calendar...')
+        await deleteCalendarEvent(reminder.calendarEventId)
+        setStatus('Removed from calendar')
+        setTimeout(() => setStatus(null), 2000)
+      } catch {
+        // Still delete locally even if calendar delete fails
+        setStatus('Removed locally')
+        setTimeout(() => setStatus(null), 2000)
+      }
+    }
+
+    // Remove from localStorage
+    const allReminders = loadReminders()
+    const updatedReminders = allReminders.filter((r: Reminder) => r.id !== id)
+    saveReminders(updatedReminders)
+
+    // Update local state
+    setReminders(prev => prev.filter(r => r.id !== id))
   }
 
   const handleConfirmTemplate = async (data: {
@@ -95,18 +134,13 @@ export default function PersonProfilePage() {
         isRecurring: data.isRecurring
       }
 
-      // Add to local reminders
       const allReminders = loadReminders()
       const updatedReminders = [newReminder, ...allReminders]
       saveReminders(updatedReminders)
 
-      // Link to person
       linkReminderToPerson(person.id, id, userEmail || undefined)
-
-      // Update local state
       setReminders(prev => [newReminder, ...prev])
 
-      // Sync with Google Calendar if signed in
       if (isSignedIn() && data.isRecurring && data.recurrencePattern) {
         const recurrenceOptions: RecurrenceOptions = {
           type: data.recurrencePattern as 'weekly' | 'monthly' | 'yearly',
@@ -123,11 +157,13 @@ export default function PersonProfilePage() {
         })
 
         if (result?.id) {
-          // Update reminder with calendar event ID
           const updated = updatedReminders.map(r =>
             r.id === id ? { ...r, calendarEventId: result.id } : r
           )
           saveReminders(updated)
+          setReminders(prev => prev.map(r =>
+            r.id === id ? { ...r, calendarEventId: result.id } : r
+          ))
         }
 
         setStatus('Reminder created')
@@ -144,6 +180,9 @@ export default function PersonProfilePage() {
             r.id === id ? { ...r, calendarEventId: result.id } : r
           )
           saveReminders(updated)
+          setReminders(prev => prev.map(r =>
+            r.id === id ? { ...r, calendarEventId: result.id } : r
+          ))
         }
 
         setStatus('Reminder created')
@@ -184,12 +223,12 @@ export default function PersonProfilePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-sand/30">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
           <button
             onClick={() => router.push('/')}
-            className="text-lavender hover:underline"
+            className="text-lavender hover:underline font-medium"
           >
             Go back home
           </button>
@@ -200,93 +239,136 @@ export default function PersonProfilePage() {
 
   if (isLoading || !person) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-sand/30">
         <div className="text-gray-400">Loading...</div>
       </div>
     )
   }
 
-  return (
-    <main className="min-h-screen px-4 py-8 md:py-16">
-      <div className="max-w-2xl mx-auto">
-        {/* Back button */}
-        <button
-          onClick={() => router.push('/')}
-          className="flex items-center text-gray-500 hover:text-gray-700 mb-6 transition-colors"
-        >
-          <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
+  const upcomingReminders = reminders
+    .filter(r => !r.isCompleted)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
 
-        {/* Header */}
-        <div className="flex items-center space-x-4 mb-8 animate-fade-in">
-          <PersonAvatar name={person.name} color={person.avatarColor} size="lg" />
-          <div>
-            <h1 className="text-3xl font-semibold text-gray-800">{person.name}</h1>
-            <p className="text-sm text-gray-400">
-              {reminders.length} reminder{reminders.length !== 1 ? 's' : ''}
-            </p>
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-white to-sand/30">
+      {/* Header Section */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-3xl mx-auto px-6 py-6">
+          {/* Back button */}
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center text-gray-400 hover:text-gray-600 mb-6 transition-colors group"
+          >
+            <svg className="w-5 h-5 mr-1.5 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-sm font-medium">Back to reminders</span>
+          </button>
+
+          {/* Profile Header */}
+          <div className="flex items-center gap-5">
+            <PersonAvatar name={person.name} color={person.avatarColor} size="lg" />
+            <div>
+              <h1 className="text-3xl md:text-4xl font-semibold text-gray-800 tracking-tight">
+                {person.name}
+              </h1>
+              <p className="text-gray-400 mt-1">
+                {upcomingReminders.length} upcoming reminder{upcomingReminders.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Status message */}
-        {status && (
-          <div className="text-center mb-4 animate-fade-in">
-            <p className="text-sm text-gray-500 bg-sand/60 inline-block px-4 py-2 rounded-xl">
+      {/* Status message */}
+      {status && (
+        <div className="max-w-3xl mx-auto px-6 pt-6">
+          <div className="text-center animate-fade-in">
+            <p className="text-sm text-gray-500 bg-white/80 backdrop-blur-sm inline-block px-4 py-2 rounded-xl border border-gray-100">
               {status}
             </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Reminders List - 2 columns */}
-          <div className="md:col-span-2 space-y-4">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-              Reminders
-            </h2>
+      {/* Main Content */}
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-            {reminders.length === 0 ? (
-              <div className="bg-sand/30 rounded-2xl p-6 text-center animate-fade-in">
-                <p className="text-gray-500">
-                  No reminders yet. Use the quick actions to create one!
+          {/* Reminders List */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                Reminders
+              </h2>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                {upcomingReminders.length} active
+              </span>
+            </div>
+
+            {upcomingReminders.length === 0 ? (
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 text-center border border-gray-100 animate-fade-in">
+                <div className="text-4xl mb-3">✨</div>
+                <p className="text-gray-500 font-medium">No reminders yet</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Use the quick actions to create one!
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {reminders
-                  .filter(r => !r.isCompleted)
-                  .sort((a, b) => a.date.getTime() - b.date.getTime())
-                  .map((reminder, index) => {
-                    const colors = ['bg-blush/40', 'bg-lavender/40', 'bg-mint/40', 'bg-peach/40', 'bg-sky/40']
-                    return (
-                      <div
-                        key={reminder.id}
-                        className={`${colors[index % colors.length]} p-4 rounded-2xl animate-slide-up`}
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        <p className="text-gray-800 font-medium">
+                {upcomingReminders.map((reminder, index) => (
+                  <div
+                    key={reminder.id}
+                    className={`${getCardColor(index)} p-4 rounded-2xl animate-slide-up
+                               hover:scale-[1.01] transition-all duration-200`}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800 font-medium leading-snug">
                           {reminder.text}
                           {reminder.isRecurring && (
-                            <span className="ml-2 text-xs text-gray-400">🔄</span>
+                            <span className="ml-2 text-xs text-gray-400" title="Recurring">
+                              {reminder.isBirthday ? '🎂' : reminder.isAnniversary ? '💝' : '🔄'}
+                            </span>
                           )}
                         </p>
-                        <p className="text-sm text-gray-500 mt-1">{formatDate(reminder.date)}</p>
+                        <p className="text-sm text-gray-500 mt-1.5">
+                          {formatDate(reminder.date)}
+                        </p>
                       </div>
-                    )
-                  })}
+                      <button
+                        onClick={() => handleDelete(reminder.id)}
+                        className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-white/50 rounded-lg transition-all"
+                        title="Delete reminder"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Care Actions Panel - 1 column */}
-          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-            <CareActionsPanel
-              personName={person.name}
-              onSelectTemplate={handleSelectTemplate}
-            />
+          {/* Care Actions Panel */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-6">
+              <CareActionsPanel
+                personName={person.name}
+                onSelectTemplate={handleSelectTemplate}
+              />
+
+              {/* Tip */}
+              <div className="mt-4 p-4 bg-white/40 rounded-xl border border-gray-100">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  <span className="font-medium text-gray-500">Tip:</span> Quick actions create
+                  reminders that sync with your Google Calendar automatically.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

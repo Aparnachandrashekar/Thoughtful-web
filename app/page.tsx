@@ -7,6 +7,7 @@ import DatePickerModal from '@/components/DatePickerModal'
 import RecurrenceEndDateModal from '@/components/RecurrenceEndDateModal'
 import RelationshipsSidebar from '@/components/RelationshipsSidebar'
 import PersonConfirmationModal from '@/components/PersonConfirmationModal'
+import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { parseReminder, RecurrenceInfo } from '@/lib/parser'
 import {
   initGoogleAuth,
@@ -21,7 +22,7 @@ import {
   RecurrenceOptions
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
-import { Person, DetectedName } from '@/lib/types'
+import { Person, DetectedName, RelationshipType } from '@/lib/types'
 import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
 import { getPrimaryDetectedName } from '@/lib/personDetection'
 
@@ -79,6 +80,12 @@ export default function Home() {
     detectedName: DetectedName
     reminderId?: string
     originalText?: string
+  } | null>(null)
+
+  // Two-step person creation: after name confirmation, ask for relationship type
+  const [pendingRelationshipSelection, setPendingRelationshipSelection] = useState<{
+    name: string
+    reminderId?: string
   } | null>(null)
 
   // Load reminders for current user
@@ -147,20 +154,41 @@ export default function Home() {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
 
-  // Handle person confirmation
+  // Handle person confirmation - first step: confirm name
   const handleConfirmPerson = useCallback(() => {
     if (pendingNameConfirmation) {
-      const newPerson = createPerson(pendingNameConfirmation.detectedName.name, userEmail || undefined)
-      if (pendingNameConfirmation.reminderId) {
-        linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
-      }
-      refreshPeople()
+      // Move to relationship selection step
+      setPendingRelationshipSelection({
+        name: pendingNameConfirmation.detectedName.name,
+        reminderId: pendingNameConfirmation.reminderId
+      })
       setPendingNameConfirmation(null)
     }
-  }, [pendingNameConfirmation, userEmail, refreshPeople])
+  }, [pendingNameConfirmation])
 
   const handleDenyPerson = useCallback(() => {
     setPendingNameConfirmation(null)
+  }, [])
+
+  // Handle relationship type selection - second step: create person with relationship type
+  const handleRelationshipConfirm = useCallback((relationshipType: RelationshipType, birthday?: string) => {
+    if (pendingRelationshipSelection) {
+      const newPerson = createPerson(
+        pendingRelationshipSelection.name,
+        relationshipType,
+        userEmail || undefined,
+        birthday
+      )
+      if (pendingRelationshipSelection.reminderId) {
+        linkReminderToPerson(newPerson.id, pendingRelationshipSelection.reminderId, userEmail || undefined)
+      }
+      refreshPeople()
+      setPendingRelationshipSelection(null)
+    }
+  }, [pendingRelationshipSelection, userEmail, refreshPeople])
+
+  const handleRelationshipCancel = useCallback(() => {
+    setPendingRelationshipSelection(null)
   }, [])
 
   // Persist reminders to localStorage when they change
@@ -538,6 +566,15 @@ export default function Home() {
           detectedName={pendingNameConfirmation.detectedName}
           onConfirm={handleConfirmPerson}
           onDeny={handleDenyPerson}
+        />
+      )}
+
+      {/* Relationship Type Modal - shown after name confirmation */}
+      {pendingRelationshipSelection && (
+        <RelationshipTypeModal
+          personName={pendingRelationshipSelection.name}
+          onConfirm={handleRelationshipConfirm}
+          onCancel={handleRelationshipCancel}
         />
       )}
     </div>

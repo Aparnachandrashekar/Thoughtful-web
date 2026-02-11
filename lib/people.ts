@@ -1,6 +1,6 @@
 // localStorage CRUD operations for people/relationships
 
-import { Person, AvatarColor } from './types'
+import { Person, AvatarColor, RelationshipType } from './types'
 
 const AVATAR_COLORS: AvatarColor[] = ['blush', 'lavender', 'mint', 'peach', 'sky']
 
@@ -20,7 +20,23 @@ export function loadPeople(email?: string): Person[] {
   if (!stored) return []
 
   try {
-    return JSON.parse(stored) as Person[]
+    const people = JSON.parse(stored) as Person[]
+
+    // Migrate existing profiles without relationshipType to 'other'
+    let needsSave = false
+    for (const person of people) {
+      if (!person.relationshipType) {
+        person.relationshipType = 'other'
+        needsSave = true
+      }
+    }
+
+    // Save migrated data
+    if (needsSave) {
+      localStorage.setItem(key, JSON.stringify(people))
+    }
+
+    return people
   } catch {
     return []
   }
@@ -39,7 +55,12 @@ export function findPersonByName(name: string, email?: string): Person | undefin
   return people.find(p => p.name.toLowerCase().trim() === normalizedName)
 }
 
-export function createPerson(name: string, email?: string): Person {
+export function createPerson(
+  name: string,
+  relationshipType: RelationshipType,
+  email?: string,
+  birthday?: string
+): Person {
   const people = loadPeople(email)
 
   // Pick a color that's least used
@@ -57,7 +78,9 @@ export function createPerson(name: string, email?: string): Person {
     name: name.trim(),
     linkedReminderIds: [],
     createdAt: new Date().toISOString(),
-    avatarColor: leastUsedColor
+    avatarColor: leastUsedColor,
+    relationshipType,
+    birthday
   }
 
   people.push(newPerson)
@@ -88,7 +111,14 @@ export function unlinkReminderFromPerson(personId: string, reminderId: string, e
 
 export function getPersonById(personId: string, email?: string): Person | undefined {
   const people = loadPeople(email)
-  return people.find(p => p.id === personId)
+  const person = people.find(p => p.id === personId)
+
+  // Ensure relationshipType exists (migration for existing data)
+  if (person && !person.relationshipType) {
+    person.relationshipType = 'other'
+  }
+
+  return person
 }
 
 export function deletePerson(personId: string, email?: string): void {
@@ -97,13 +127,19 @@ export function deletePerson(personId: string, email?: string): void {
   savePeople(filtered, email)
 }
 
-export function updatePerson(personId: string, updates: Partial<Pick<Person, 'name' | 'avatarColor'>>, email?: string): void {
+export function updatePerson(
+  personId: string,
+  updates: Partial<Pick<Person, 'name' | 'avatarColor' | 'relationshipType' | 'birthday'>>,
+  email?: string
+): void {
   const people = loadPeople(email)
   const person = people.find(p => p.id === personId)
 
   if (person) {
     if (updates.name !== undefined) person.name = updates.name.trim()
     if (updates.avatarColor !== undefined) person.avatarColor = updates.avatarColor
+    if (updates.relationshipType !== undefined) person.relationshipType = updates.relationshipType
+    if (updates.birthday !== undefined) person.birthday = updates.birthday
     savePeople(people, email)
   }
 }

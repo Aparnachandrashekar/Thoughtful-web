@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import PersonAvatar from '@/components/PersonAvatar'
 import CareActionsPanel from '@/components/CareActionsPanel'
 import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
+import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { Reminder } from '@/components/ReminderList'
-import { Person, CareTemplate } from '@/lib/types'
-import { getPersonById, linkReminderToPerson } from '@/lib/people'
+import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
+import { getPersonById, linkReminderToPerson, updatePerson } from '@/lib/people'
 import { getRemindersKey, getUserEmail, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
@@ -29,11 +30,12 @@ export default function PersonProfilePage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState<string | null>(null)
 
-  // Template confirmation modal state
+  // Modal states
   const [templateModal, setTemplateModal] = useState<{
     template: CareTemplate
     generatedText: string
   } | null>(null)
+  const [showEditRelationship, setShowEditRelationship] = useState(false)
 
   const loadReminders = useCallback(() => {
     try {
@@ -54,19 +56,7 @@ export default function PersonProfilePage() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
-  const refreshReminders = useCallback(() => {
-    const loadedPerson = getPersonById(personId, userEmail || undefined)
-    if (loadedPerson) {
-      const allReminders = loadReminders()
-      const linkedReminders = allReminders.filter((r: Reminder) =>
-        loadedPerson.linkedReminderIds.includes(r.id) ||
-        r.text.toLowerCase().includes(loadedPerson.name.toLowerCase())
-      )
-      setReminders(linkedReminders)
-    }
-  }, [personId, userEmail, loadReminders])
-
-  useEffect(() => {
+  const loadPersonData = useCallback(() => {
     const loadedPerson = getPersonById(personId, userEmail || undefined)
     if (loadedPerson) {
       setPerson(loadedPerson)
@@ -82,14 +72,31 @@ export default function PersonProfilePage() {
     setIsLoading(false)
   }, [personId, userEmail, loadReminders])
 
+  useEffect(() => {
+    loadPersonData()
+  }, [loadPersonData])
+
   const handleSelectTemplate = (template: CareTemplate, generatedText: string) => {
     setTemplateModal({ template, generatedText })
+  }
+
+  const handleEditRelationship = () => {
+    setShowEditRelationship(true)
+  }
+
+  const handleUpdateRelationship = (relationshipType: RelationshipType, birthday?: string) => {
+    if (person) {
+      updatePerson(person.id, { relationshipType, birthday }, userEmail || undefined)
+      setPerson({ ...person, relationshipType, birthday })
+      setShowEditRelationship(false)
+      setStatus('Profile updated')
+      setTimeout(() => setStatus(null), 2000)
+    }
   }
 
   const handleDelete = async (id: string) => {
     const reminder = reminders.find(r => r.id === id)
 
-    // Delete from Google Calendar if signed in
     if (reminder?.calendarEventId && isSignedIn()) {
       try {
         setStatus('Removing from calendar...')
@@ -97,18 +104,14 @@ export default function PersonProfilePage() {
         setStatus('Removed from calendar')
         setTimeout(() => setStatus(null), 2000)
       } catch {
-        // Still delete locally even if calendar delete fails
         setStatus('Removed locally')
         setTimeout(() => setStatus(null), 2000)
       }
     }
 
-    // Remove from localStorage
     const allReminders = loadReminders()
     const updatedReminders = allReminders.filter((r: Reminder) => r.id !== id)
     saveReminders(updatedReminders)
-
-    // Update local state
     setReminders(prev => prev.filter(r => r.id !== id))
   }
 
@@ -117,7 +120,8 @@ export default function PersonProfilePage() {
     date: string
     time: string
     isRecurring: boolean
-    recurrencePattern: string | null
+    recurrenceType: string | null
+    recurrenceInterval: number
   }) => {
     if (!person) return
 
@@ -141,12 +145,13 @@ export default function PersonProfilePage() {
       linkReminderToPerson(person.id, id, userEmail || undefined)
       setReminders(prev => [newReminder, ...prev])
 
-      if (isSignedIn() && data.isRecurring && data.recurrencePattern) {
+      if (isSignedIn() && data.isRecurring && data.recurrenceType) {
         const recurrenceOptions: RecurrenceOptions = {
-          type: data.recurrencePattern as 'weekly' | 'monthly' | 'yearly',
+          type: data.recurrenceType as 'weekly' | 'monthly' | 'yearly',
           isBirthday: false,
           isAnniversary: false,
-          endDate: null
+          endDate: null,
+          interval: data.recurrenceInterval
         }
 
         setStatus('Creating calendar event...')
@@ -266,13 +271,24 @@ export default function PersonProfilePage() {
           </button>
 
           {/* Profile Header */}
-          <div className="flex items-center gap-5">
+          <div className="flex items-start gap-5">
             <PersonAvatar name={person.name} color={person.avatarColor} size="lg" />
-            <div>
+            <div className="flex-1">
               <h1 className="text-3xl md:text-4xl font-semibold text-gray-800 tracking-tight">
                 {person.name}
               </h1>
-              <p className="text-gray-400 mt-1">
+              <div className="flex items-center gap-3 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-lavender/20 rounded-full text-sm">
+                  <span>{RELATIONSHIP_EMOJI[person.relationshipType]}</span>
+                  <span className="text-gray-600">{RELATIONSHIP_LABELS[person.relationshipType]}</span>
+                </span>
+                {person.birthday && (
+                  <span className="text-sm text-gray-400">
+                    🎂 {new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-400 mt-2 text-sm">
                 {upcomingReminders.length} upcoming reminder{upcomingReminders.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -311,7 +327,7 @@ export default function PersonProfilePage() {
                 <div className="text-4xl mb-3">✨</div>
                 <p className="text-gray-500 font-medium">No reminders yet</p>
                 <p className="text-gray-400 text-sm mt-1">
-                  Use the quick actions to create one!
+                  Use the suggested actions to create one!
                 </p>
               </div>
             ) : (
@@ -358,14 +374,17 @@ export default function PersonProfilePage() {
             <div className="sticky top-6">
               <CareActionsPanel
                 personName={person.name}
+                relationshipType={person.relationshipType}
+                birthday={person.birthday}
                 onSelectTemplate={handleSelectTemplate}
+                onEditRelationship={handleEditRelationship}
               />
 
               {/* Tip */}
               <div className="mt-4 p-4 bg-white/40 rounded-xl border border-gray-100">
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  <span className="font-medium text-gray-500">Tip:</span> Quick actions create
-                  reminders that sync with your Google Calendar automatically.
+                  <span className="font-medium text-gray-500">Tip:</span> Templates are customized
+                  based on your relationship with {person.name}.
                 </p>
               </div>
             </div>
@@ -379,8 +398,18 @@ export default function PersonProfilePage() {
           template={templateModal.template}
           generatedText={templateModal.generatedText}
           personName={person.name}
+          birthday={person.birthday}
           onConfirm={handleConfirmTemplate}
           onCancel={() => setTemplateModal(null)}
+        />
+      )}
+
+      {/* Edit Relationship Modal */}
+      {showEditRelationship && (
+        <RelationshipTypeModal
+          personName={person.name}
+          onConfirm={handleUpdateRelationship}
+          onCancel={() => setShowEditRelationship(false)}
         />
       )}
     </main>

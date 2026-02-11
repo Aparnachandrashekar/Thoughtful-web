@@ -150,15 +150,12 @@ export default function Home() {
   // Handle person confirmation - create profile with default 'other' type
   // User can edit relationship type later from profile page
   const handleConfirmPerson = useCallback(() => {
-    console.log('handleConfirmPerson called', pendingNameConfirmation)
     if (pendingNameConfirmation) {
-      console.log('Creating person:', pendingNameConfirmation.detectedName.name)
       const newPerson = createPerson(
         pendingNameConfirmation.detectedName.name,
         'other',  // Default relationship type - can be edited later
         userEmail || undefined
       )
-      console.log('Person created:', newPerson)
       if (pendingNameConfirmation.reminderId) {
         linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
       }
@@ -271,17 +268,14 @@ export default function Home() {
     // Detect names for person profile creation (only for new reminders)
     if (!isUpdate) {
       const detectedName = getPrimaryDetectedName(rawText)
-      console.log('Name detection result:', detectedName, 'from text:', rawText)
       if (detectedName) {
         const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
-        console.log('Existing person check:', existingPerson)
         if (existingPerson) {
           // Auto-link to existing person
           linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
           refreshPeople()
         } else {
           // Show confirmation modal for new person
-          console.log('Showing confirmation modal for:', detectedName.name)
           setPendingNameConfirmation({
             detectedName,
             reminderId: id,

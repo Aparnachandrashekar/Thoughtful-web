@@ -17,12 +17,23 @@ function getCardColor(index: number): string {
   return colors[index % colors.length]
 }
 
+// Get email directly from localStorage (works without Google auth init)
+function getStoredEmail(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('thoughtful-google-email')
+}
+
 export default function PersonProfilePage() {
   const params = useParams()
   const router = useRouter()
 
   const personId = params.id as string
-  const userEmail = isSignedIn() ? getUserEmail() : null
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Load email from localStorage on mount
+  useEffect(() => {
+    setUserEmail(getStoredEmail())
+  }, [])
 
   const [person, setPerson] = useState<Person | null>(null)
   const [reminders, setReminders] = useState<Reminder[]>([])
@@ -56,8 +67,11 @@ export default function PersonProfilePage() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
-  const loadPersonData = useCallback(() => {
-    const loadedPerson = getPersonById(personId, userEmail || undefined)
+  // Load person data after email is determined
+  useEffect(() => {
+    // Wait for email to be loaded from localStorage
+    const email = getStoredEmail()
+    const loadedPerson = getPersonById(personId, email || undefined)
     if (loadedPerson) {
       setPerson(loadedPerson)
       const allReminders = loadReminders()
@@ -70,11 +84,7 @@ export default function PersonProfilePage() {
       setError('Person not found')
     }
     setIsLoading(false)
-  }, [personId, userEmail, loadReminders])
-
-  useEffect(() => {
-    loadPersonData()
-  }, [loadPersonData])
+  }, [personId, loadReminders])
 
   const handleSelectTemplate = (template: CareTemplate, generatedText: string) => {
     setTemplateModal({ template, generatedText })

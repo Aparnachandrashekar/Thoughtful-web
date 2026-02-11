@@ -5,6 +5,8 @@ import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
 import RecurrenceEndDateModal from '@/components/RecurrenceEndDateModal'
+import RelationshipsSidebar from '@/components/RelationshipsSidebar'
+import PersonConfirmationModal from '@/components/PersonConfirmationModal'
 import { parseReminder, RecurrenceInfo } from '@/lib/parser'
 import {
   initGoogleAuth,
@@ -19,6 +21,9 @@ import {
   RecurrenceOptions
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
+import { Person, DetectedName } from '@/lib/types'
+import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
+import { getPrimaryDetectedName } from '@/lib/personDetection'
 
 // Helper to generate human-readable pattern description
 function getPatternDescription(recurrence: RecurrenceInfo): string {
@@ -65,6 +70,15 @@ export default function Home() {
     text: string
     date: Date
     recurrence: RecurrenceInfo
+  } | null>(null)
+
+  // People/Relationships state
+  const [people, setPeople] = useState<Person[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pendingNameConfirmation, setPendingNameConfirmation] = useState<{
+    detectedName: DetectedName
+    reminderId?: string
+    originalText?: string
   } | null>(null)
 
   // Load reminders for current user
@@ -120,6 +134,34 @@ export default function Home() {
       loadReminders()
     }
   }, [mounted, userEmail, loadReminders])
+
+  // Load people when user changes
+  useEffect(() => {
+    if (mounted) {
+      setPeople(loadPeople(userEmail || undefined))
+    }
+  }, [mounted, userEmail])
+
+  // Refresh people list
+  const refreshPeople = useCallback(() => {
+    setPeople(loadPeople(userEmail || undefined))
+  }, [userEmail])
+
+  // Handle person confirmation
+  const handleConfirmPerson = useCallback(() => {
+    if (pendingNameConfirmation) {
+      const newPerson = createPerson(pendingNameConfirmation.detectedName.name, userEmail || undefined)
+      if (pendingNameConfirmation.reminderId) {
+        linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
+      }
+      refreshPeople()
+      setPendingNameConfirmation(null)
+    }
+  }, [pendingNameConfirmation, userEmail, refreshPeople])
+
+  const handleDenyPerson = useCallback(() => {
+    setPendingNameConfirmation(null)
+  }, [])
 
   // Persist reminders to localStorage when they change
   useEffect(() => {
@@ -217,7 +259,27 @@ export default function Home() {
       setStatus('Saved locally. Sign in to Google for calendar reminders.')
       setTimeout(() => setStatus(null), 3000)
     }
-  }, [])
+
+    // Detect names for person profile creation (only for new reminders)
+    if (!isUpdate) {
+      const detectedName = getPrimaryDetectedName(rawText)
+      if (detectedName) {
+        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
+        if (existingPerson) {
+          // Auto-link to existing person
+          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
+          refreshPeople()
+        } else {
+          // Show confirmation modal for new person
+          setPendingNameConfirmation({
+            detectedName,
+            reminderId: id,
+            originalText: rawText
+          })
+        }
+      }
+    }
+  }, [userEmail, refreshPeople])
 
   const handleAddReminder = (text: string) => {
     // Check if this is an update request
@@ -356,8 +418,18 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-8 md:py-16">
-      <div className="max-w-xl mx-auto">
+    <div className="flex min-h-screen">
+      {/* Relationships Sidebar */}
+      {signedIn && (
+        <RelationshipsSidebar
+          people={people}
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+        />
+      )}
+
+      <main className="flex-1 px-4 py-8 md:py-16">
+        <div className="max-w-xl mx-auto">
         {/* Header */}
         <div className="text-center mb-10 animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-semibold text-gray-800 tracking-tight">
@@ -458,6 +530,16 @@ export default function Home() {
           onCancel={() => setPendingRecurrence(null)}
         />
       )}
-    </main>
+      </main>
+
+      {/* Person Confirmation Modal */}
+      {pendingNameConfirmation && (
+        <PersonConfirmationModal
+          detectedName={pendingNameConfirmation.detectedName}
+          onConfirm={handleConfirmPerson}
+          onDeny={handleDenyPerson}
+        />
+      )}
+    </div>
   )
 }

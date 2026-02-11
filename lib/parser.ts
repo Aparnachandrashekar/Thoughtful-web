@@ -291,6 +291,40 @@ function preprocessText(text: string): string {
   return processed.trim()
 }
 
+// Extract specific day of month from text like "on 20", "the 20th", "on the 15th"
+function extractDayOfMonth(text: string): number | null {
+  // Match patterns like "on 20", "on the 20", "the 20th", "on 15th"
+  const match = text.match(/(?:on\s+(?:the\s+)?|the\s+)(\d{1,2})(?:st|nd|rd|th)?\b/i)
+  if (match) {
+    const day = parseInt(match[1], 10)
+    if (day >= 1 && day <= 31) {
+      return day
+    }
+  }
+  return null
+}
+
+// Build a date for a specific day of month, preferring next occurrence
+function buildDateForDayOfMonth(dayOfMonth: number): Date {
+  const today = new Date()
+  let year = today.getFullYear()
+  let month = today.getMonth()
+
+  let result = new Date(year, month, dayOfMonth, 8, 0, 0, 0)
+
+  // If this day has passed this month, use next month
+  if (result <= today) {
+    month++
+    if (month > 11) {
+      month = 0
+      year++
+    }
+    result = new Date(year, month, dayOfMonth, 8, 0, 0, 0)
+  }
+
+  return result
+}
+
 // Fix ambiguous hours - default to PM for typical reminder hours (1-7)
 function fixAmbiguousHour(date: Date, hasExplicitMeridiem: boolean): { date: Date; needsConfirmation: boolean } {
   if (hasExplicitMeridiem) {
@@ -363,6 +397,18 @@ export function parseReminder(text: string): ParseResult {
     return {
       title: title || text,
       date: recurrence.calculatedDate,
+      recurrence,
+    }
+  }
+
+  // Check for explicit day of month pattern like "on 20", "the 15th"
+  // This takes priority because chrono often misinterprets these
+  const explicitDay = extractDayOfMonth(text)
+  if (explicitDay) {
+    const title = extractTitle(text)
+    return {
+      title: title || text,
+      date: buildDateForDayOfMonth(explicitDay),
       recurrence,
     }
   }

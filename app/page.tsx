@@ -487,28 +487,28 @@ export default function Home() {
         />
       )}
 
-      <main className="flex-1 px-4 py-8 md:py-16">
-        <div className="max-w-xl mx-auto">
+      <main className="flex-1 px-6 md:px-12 py-8 md:py-12">
+        <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-10 animate-fade-in">
-          <h1 className="text-4xl md:text-5xl font-semibold text-gray-800 tracking-tight">
+        <div className="text-center mb-12 animate-fade-in">
+          <h1 className="text-4xl md:text-6xl font-bold text-gray-800 tracking-tight">
             Thoughtful
           </h1>
-          <p className="mt-3 text-gray-500 text-lg">
+          <p className="mt-4 text-gray-500 text-lg md:text-xl max-w-2xl mx-auto">
             Your guide to building beautiful relationships by being thoughtful
           </p>
         </div>
 
         {/* Google Sign-in */}
-        <div className="flex justify-center mb-6 animate-fade-in">
+        <div className="flex justify-center mb-8 animate-fade-in">
           {googleReady && !signedIn ? (
             <button
               onClick={handleGoogleSignIn}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-gray-200
-                         rounded-xl text-sm font-medium text-gray-700 hover:border-lavender
-                         hover:shadow-sm transition-all active:scale-95"
+              className="flex items-center gap-3 px-8 py-4 bg-white border-2 border-gray-200
+                         rounded-2xl text-base font-semibold text-gray-700 hover:border-lavender
+                         hover:shadow-lg hover:scale-[1.02] transition-all duration-200 active:scale-95"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -521,8 +521,8 @@ export default function Home() {
 
         {/* Status message */}
         {status && (
-          <div className="text-center mb-4 animate-fade-in">
-            <p className="text-sm text-gray-500 bg-sand/60 inline-block px-4 py-2 rounded-xl">
+          <div className="text-center mb-6 animate-fade-in">
+            <p className="text-sm text-gray-600 bg-white/80 backdrop-blur-sm inline-block px-5 py-2.5 rounded-2xl border border-gray-100 shadow-sm">
               {status}
             </p>
           </div>
@@ -532,18 +532,19 @@ export default function Home() {
         {signedIn ? (
           <>
             {/* Input */}
-            <div className="mb-6 animate-slide-up">
+            <div className="mb-8 animate-slide-up">
               <ReminderInput onSubmit={handleAddReminder} />
             </div>
 
             {/* Help text */}
-            <p className="text-center text-sm text-gray-400 mb-6">
-              Click X to delete. To edit, type &quot;update&quot; followed by the event name and new details.
-              <br />
-              <span className="text-gray-300">
+            <div className="text-center mb-8 p-4 bg-white/50 rounded-2xl border border-gray-100">
+              <p className="text-sm text-gray-500">
+                Click X to delete. To edit, type <span className="font-semibold text-gray-600">&quot;update&quot;</span> followed by the event name and new details.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
                 Recurring: &quot;every Friday&quot;, &quot;alternating Mondays&quot;, &quot;last Saturday of the month&quot;, &quot;until Dec 2026&quot;
-              </span>
-            </p>
+              </p>
+            </div>
 
             {/* Reminder List */}
             <ReminderList
@@ -553,8 +554,11 @@ export default function Home() {
             />
           </>
         ) : (
-          <div className="text-center text-gray-400 py-10">
-            <p>Sign in with Google to create reminders</p>
+          <div className="text-center py-16 animate-fade-in">
+            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-12 border border-gray-100 max-w-md mx-auto">
+              <div className="text-5xl mb-4">💜</div>
+              <p className="text-gray-500 text-lg">Sign in with Google to start creating reminders</p>
+            </div>
           </div>
         )}
       </div>

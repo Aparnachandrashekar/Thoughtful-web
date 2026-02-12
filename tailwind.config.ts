@@ -18,7 +18,7 @@ const config: Config = {
         sand: '#F5F0E8',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Nunito', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         'xl': '1rem',

@@ -8,16 +8,15 @@ import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
 import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
-import { getPersonById, linkReminderToPerson, updatePerson } from '@/lib/people'
+import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
 import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
 function getCardColor(index: number): string {
-  const colors = ['bg-blush/40', 'bg-lavender/40', 'bg-mint/40', 'bg-peach/40', 'bg-sky/40']
+  const colors = ['bg-blush/60', 'bg-lavender/60', 'bg-mint/60', 'bg-peach/60', 'bg-sky/60']
   return colors[index % colors.length]
 }
 
-// Get email directly from localStorage (works without Google auth init)
 function getStoredEmail(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('thoughtful-google-email')
@@ -30,7 +29,6 @@ export default function PersonProfilePage() {
   const personId = params.id as string
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
-  // Load email from localStorage on mount
   useEffect(() => {
     setUserEmail(getStoredEmail())
   }, [])
@@ -41,7 +39,6 @@ export default function PersonProfilePage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState<string | null>(null)
 
-  // Modal states
   const [templateModal, setTemplateModal] = useState<{
     template: CareTemplate
     generatedText: string
@@ -49,8 +46,8 @@ export default function PersonProfilePage() {
   const [showEditRelationship, setShowEditRelationship] = useState(false)
   const [showEditEmail, setShowEditEmail] = useState(false)
   const [editingEmail, setEditingEmail] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  // Tab for event history
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
   const loadReminders = useCallback(() => {
@@ -72,7 +69,6 @@ export default function PersonProfilePage() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
-  // Load person data after email is determined
   useEffect(() => {
     const email = getStoredEmail()
     const loadedPerson = getPersonById(personId, email || undefined)
@@ -120,7 +116,14 @@ export default function PersonProfilePage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteProfile = () => {
+    if (person) {
+      deletePerson(person.id, userEmail || undefined)
+      router.push('/')
+    }
+  }
+
+  const handleDeleteReminder = async (id: string) => {
     const reminder = reminders.find(r => r.id === id)
 
     if (reminder?.calendarEventId && isSignedIn()) {
@@ -242,11 +245,12 @@ export default function PersonProfilePage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-sand/30">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
+        <div className="text-center p-8">
+          <div className="text-5xl mb-4">😕</div>
+          <p className="text-red-500 mb-4 text-lg">{error}</p>
           <button
             onClick={() => router.push('/')}
-            className="text-lavender hover:underline font-medium"
+            className="px-6 py-3 bg-lavender text-gray-800 rounded-2xl font-semibold hover:bg-lavender/80 transition-all"
           >
             Go back home
           </button>
@@ -258,18 +262,19 @@ export default function PersonProfilePage() {
   if (isLoading || !person) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-sand/30">
-        <div className="text-gray-400">Loading...</div>
+        <div className="text-gray-400 text-lg">Loading...</div>
       </div>
     )
   }
 
   const now = new Date()
+  // History is purely date-based - no isCompleted check
   const upcomingReminders = reminders
-    .filter(r => !r.isCompleted && r.date >= now)
+    .filter(r => r.date >= now)
     .sort((a, b) => a.date.getTime() - b.date.getTime())
 
   const pastReminders = reminders
-    .filter(r => r.isCompleted || r.date < now)
+    .filter(r => r.date < now)
     .sort((a, b) => b.date.getTime() - a.date.getTime())
 
   const displayedReminders = activeTab === 'upcoming' ? upcomingReminders : pastReminders
@@ -278,51 +283,56 @@ export default function PersonProfilePage() {
     <main className="min-h-screen bg-gradient-to-b from-white to-sand/30">
       {/* Header Section */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-6 py-6">
+        <div className="max-w-6xl mx-auto px-6 md:px-12 py-8">
           {/* Back button */}
           <button
             onClick={() => router.push('/')}
-            className="flex items-center text-gray-400 hover:text-gray-600 mb-6 transition-colors group"
+            className="flex items-center text-gray-400 hover:text-gray-600 mb-8 transition-all group"
           >
-            <svg className="w-5 h-5 mr-1.5 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <span className="text-sm font-medium">Back to reminders</span>
+            <span className="font-medium">Back to reminders</span>
           </button>
 
           {/* Profile Header */}
-          <div className="flex items-start gap-5">
+          <div className="flex flex-col md:flex-row md:items-start gap-6">
             <PersonAvatar name={person.name} color={person.avatarColor} size="lg" />
-            <div className="flex-1">
-              <h1 className="text-3xl md:text-4xl font-semibold text-gray-800 tracking-tight">
-                {person.name}
-              </h1>
-              <div className="flex items-center flex-wrap gap-3 mt-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-lavender/20 rounded-full text-sm">
-                  <span>{RELATIONSHIP_EMOJI[person.relationshipType]}</span>
-                  <span className="text-gray-600">{RELATIONSHIP_LABELS[person.relationshipType]}</span>
-                </span>
-                {person.birthday && (
-                  <span className="text-sm text-gray-400">
-                    🎂 {new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            <div className="flex-1 space-y-4">
+              <div>
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-800 tracking-tight">
+                  {person.name}
+                </h1>
+                <div className="flex items-center flex-wrap gap-3 mt-3">
+                  <span className="inline-flex items-center gap-2 px-4 py-2 bg-lavender/30 rounded-2xl text-base font-medium">
+                    <span className="text-xl">{RELATIONSHIP_EMOJI[person.relationshipType]}</span>
+                    <span className="text-gray-700">{RELATIONSHIP_LABELS[person.relationshipType]}</span>
                   </span>
-                )}
+                  {person.birthday && (
+                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-peach/30 rounded-2xl text-base">
+                      <span>🎂</span>
+                      <span className="text-gray-600">{new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Email section */}
-              <div className="mt-3 flex items-center gap-2">
+              {/* Action buttons row */}
+              <div className="flex flex-wrap gap-3">
+                {/* Email button */}
                 {showEditEmail ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 p-2 bg-sky/20 rounded-2xl">
                     <input
                       type="email"
                       value={editingEmail}
                       onChange={(e) => setEditingEmail(e.target.value)}
                       placeholder="email@example.com"
-                      className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:border-lavender focus:ring-1 focus:ring-lavender outline-none w-48"
+                      className="text-sm px-4 py-2 border-2 border-sky/50 rounded-xl focus:border-sky focus:ring-2 focus:ring-sky/30 outline-none w-56"
+                      autoFocus
                     />
                     <button
                       onClick={handleSaveEmail}
-                      className="text-xs text-lavender hover:text-lavender/80 font-medium"
+                      className="px-4 py-2 bg-sky text-gray-800 rounded-xl font-semibold text-sm hover:bg-sky/80 transition-all"
                     >
                       Save
                     </button>
@@ -331,7 +341,7 @@ export default function PersonProfilePage() {
                         setShowEditEmail(false)
                         setEditingEmail(person.email || '')
                       }}
-                      className="text-xs text-gray-400 hover:text-gray-600"
+                      className="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
                       Cancel
                     </button>
@@ -339,15 +349,37 @@ export default function PersonProfilePage() {
                 ) : (
                   <button
                     onClick={() => setShowEditEmail(true)}
-                    className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm transition-all hover:scale-[1.02] ${
+                      person.email
+                        ? 'bg-sky/20 text-gray-700 hover:bg-sky/30'
+                        : 'bg-sky/40 text-gray-800 hover:bg-sky/50 shadow-sm'
+                    }`}
                   >
-                    <span>📧</span>
-                    <span>{person.email || 'Add email for calendar invites'}</span>
+                    <span className="text-lg">📧</span>
+                    <span>{person.email || 'Add email for invites'}</span>
                   </button>
                 )}
+
+                {/* Edit relationship button */}
+                <button
+                  onClick={handleEditRelationship}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-mint/30 rounded-2xl font-medium text-sm text-gray-700 hover:bg-mint/50 transition-all hover:scale-[1.02]"
+                >
+                  <span className="text-lg">✏️</span>
+                  <span>Edit profile</span>
+                </button>
+
+                {/* Delete profile button */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blush/30 rounded-2xl font-medium text-sm text-gray-700 hover:bg-blush/50 transition-all hover:scale-[1.02]"
+                >
+                  <span className="text-lg">🗑️</span>
+                  <span>Delete</span>
+                </button>
               </div>
 
-              <p className="text-gray-400 mt-2 text-sm">
+              <p className="text-gray-500 text-base">
                 {upcomingReminders.length} upcoming · {pastReminders.length} past
               </p>
             </div>
@@ -357,9 +389,9 @@ export default function PersonProfilePage() {
 
       {/* Status message */}
       {status && (
-        <div className="max-w-3xl mx-auto px-6 pt-6">
+        <div className="max-w-6xl mx-auto px-6 md:px-12 pt-6">
           <div className="text-center animate-fade-in">
-            <p className="text-sm text-gray-500 bg-white/80 backdrop-blur-sm inline-block px-4 py-2 rounded-xl border border-gray-100">
+            <p className="text-sm text-gray-600 bg-white/80 backdrop-blur-sm inline-block px-5 py-3 rounded-2xl border border-gray-100 shadow-sm">
               {status}
             </p>
           </div>
@@ -367,84 +399,78 @@ export default function PersonProfilePage() {
       )}
 
       {/* Main Content */}
-      <div className="max-w-3xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-6xl mx-auto px-6 md:px-12 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
           {/* Reminders List */}
-          <div className="lg:col-span-2 space-y-5">
+          <div className="lg:col-span-2 space-y-6">
             {/* Tabs */}
-            <div className="flex items-center gap-4 border-b border-gray-100">
+            <div className="flex items-center gap-2 p-1.5 bg-white/60 backdrop-blur-sm rounded-2xl border border-gray-100 w-fit">
               <button
                 onClick={() => setActiveTab('upcoming')}
-                className={`pb-3 text-sm font-medium transition-colors relative ${
+                className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                   activeTab === 'upcoming'
-                    ? 'text-gray-800'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'bg-lavender text-gray-800 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Upcoming ({upcomingReminders.length})
-                {activeTab === 'upcoming' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lavender rounded-full" />
-                )}
               </button>
               <button
                 onClick={() => setActiveTab('past')}
-                className={`pb-3 text-sm font-medium transition-colors relative ${
+                className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                   activeTab === 'past'
-                    ? 'text-gray-800'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'bg-lavender text-gray-800 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 History ({pastReminders.length})
-                {activeTab === 'past' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lavender rounded-full" />
-                )}
               </button>
             </div>
 
             {displayedReminders.length === 0 ? (
-              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 text-center border border-gray-100 animate-fade-in">
-                <div className="text-4xl mb-3">{activeTab === 'upcoming' ? '✨' : '📚'}</div>
-                <p className="text-gray-500 font-medium">
+              <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-12 text-center border border-gray-100 animate-fade-in">
+                <div className="text-6xl mb-4">{activeTab === 'upcoming' ? '✨' : '📚'}</div>
+                <p className="text-gray-600 font-semibold text-lg">
                   {activeTab === 'upcoming' ? 'No upcoming reminders' : 'No past reminders'}
                 </p>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-gray-400 mt-2">
                   {activeTab === 'upcoming'
                     ? 'Use the suggested actions to create one!'
-                    : 'Completed reminders will appear here'}
+                    : 'Past events will appear here'}
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {displayedReminders.map((reminder, index) => (
                   <div
                     key={reminder.id}
-                    className={`${getCardColor(index)} p-4 rounded-2xl animate-slide-up
-                               hover:scale-[1.01] transition-all duration-200
-                               ${reminder.isCompleted || reminder.date < now ? 'opacity-60' : ''}`}
+                    className={`${getCardColor(index)} p-5 rounded-2xl animate-slide-up
+                               hover:scale-[1.01] hover:shadow-md transition-all duration-200
+                               ${activeTab === 'past' ? 'opacity-70' : ''}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-4">
                       <div className="flex-1 min-w-0">
-                        <p className={`text-gray-800 font-medium leading-snug ${reminder.isCompleted ? 'line-through' : ''}`}>
+                        <p className={`text-gray-800 font-semibold text-lg leading-snug ${activeTab === 'past' ? 'line-through' : ''}`}>
                           {reminder.text}
                           {reminder.isRecurring && (
-                            <span className="ml-2 text-xs text-gray-400" title="Recurring">
+                            <span className="ml-2 text-sm" title="Recurring">
                               {reminder.isBirthday ? '🎂' : reminder.isAnniversary ? '💝' : '🔄'}
                             </span>
                           )}
                         </p>
-                        <p className="text-sm text-gray-500 mt-1.5">
+                        <p className="text-base text-gray-600 mt-2">
                           {formatDate(reminder.date)}
-                          {reminder.isCompleted && <span className="ml-2 text-green-600">✓ Done</span>}
+                          {activeTab === 'past' && <span className="ml-2 text-green-600 font-medium">✓ Done</span>}
                         </p>
                       </div>
                       <button
-                        onClick={() => handleDelete(reminder.id)}
-                        className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-white/50 rounded-lg transition-all"
+                        onClick={() => handleDeleteReminder(reminder.id)}
+                        className="text-gray-400 hover:text-red-500 p-2 hover:bg-white/50 rounded-xl transition-all"
                         title="Delete reminder"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -457,7 +483,7 @@ export default function PersonProfilePage() {
 
           {/* Care Actions Panel */}
           <div className="lg:col-span-1">
-            <div className="sticky top-6">
+            <div className="sticky top-6 space-y-4">
               <CareActionsPanel
                 personName={person.name}
                 relationshipType={person.relationshipType}
@@ -468,21 +494,13 @@ export default function PersonProfilePage() {
 
               {/* Email tip */}
               {!person.email && (
-                <div className="mt-4 p-4 bg-mint/20 rounded-xl border border-mint/30">
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    <span className="font-medium">💡 Tip:</span> Add {person.name}'s email to send them
+                <div className="p-5 bg-gradient-to-br from-sky/30 to-mint/20 rounded-2xl border border-sky/30">
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    <span className="font-bold">💡 Tip:</span> Add {person.name}&apos;s email to send them
                     calendar invites with Google Meet links.
                   </p>
                 </div>
               )}
-
-              {/* Tip */}
-              <div className="mt-4 p-4 bg-white/40 rounded-xl border border-gray-100">
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  <span className="font-medium text-gray-500">Tip:</span> Templates are customized
-                  based on your relationship with {person.name}.
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -508,6 +526,36 @@ export default function PersonProfilePage() {
           onConfirm={handleUpdateRelationship}
           onCancel={() => setShowEditRelationship(false)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="relative bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full mx-4 animate-fade-in">
+            <div className="text-center space-y-4">
+              <div className="text-5xl">🗑️</div>
+              <h3 className="text-xl font-bold text-gray-800">Delete Profile?</h3>
+              <p className="text-gray-500">
+                Are you sure you want to delete {person.name}&apos;s profile? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-3 px-4 border-2 border-gray-200 rounded-2xl text-gray-600 hover:bg-gray-50 font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteProfile}
+                  className="flex-1 py-3 px-4 bg-red-500 text-white rounded-2xl hover:bg-red-600 font-semibold transition-all"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )

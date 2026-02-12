@@ -200,8 +200,10 @@ export default function Home() {
     existingReminder?: Reminder,
     recurrenceOptions?: RecurrenceOptions
   ) => {
-    const id = existingReminder?.id || Date.now().toString()
-    const friendlyTitle = await generateTitle(rawText)
+    try {
+      setStatus('Creating reminder...')
+      const id = existingReminder?.id || Date.now().toString()
+      const friendlyTitle = await generateTitle(rawText)
 
     const newReminder: Reminder = {
       id,
@@ -284,6 +286,11 @@ export default function Home() {
         }
       }
     }
+    } catch (error) {
+      console.error('Error creating reminder:', error)
+      setStatus('Error creating reminder. Please try again.')
+      setTimeout(() => setStatus(null), 3000)
+    }
   }, [userEmail, refreshPeople])
 
   const handleAddReminder = (text: string) => {
@@ -293,19 +300,39 @@ export default function Home() {
 
     if (isUpdateRequest) {
       // Find matching reminder by keyword
+      // Format: "update [reminder name] to [new time/date]"
       const cleanText = text.replace(/update/gi, '').trim()
-      const existingReminder = reminders.find(r =>
-        r.text.toLowerCase().includes(cleanText.toLowerCase()) ||
-        cleanText.toLowerCase().includes(r.text.toLowerCase().split(' ').slice(0, 3).join(' '))
-      )
+
+      // Try to find the best matching reminder
+      const existingReminder = reminders.find(r => {
+        const reminderWords = r.text.toLowerCase().split(/\s+/)
+        const inputWords = cleanText.toLowerCase().split(/\s+/)
+
+        // Check if reminder name is contained in the input
+        // e.g., "call mom to 4pm" should match reminder "Call mom"
+        const reminderName = r.text.toLowerCase()
+        if (cleanText.toLowerCase().includes(reminderName)) return true
+
+        // Check if first few words match (flexible matching)
+        const matchWords = reminderWords.slice(0, 3).filter(w =>
+          !['at', 'on', 'to', 'the', 'a', 'an'].includes(w)
+        )
+        return matchWords.every(word => inputWords.includes(word))
+      })
 
       if (existingReminder) {
         const result = parseReminder(cleanText)
         if (result.date) {
           addReminderWithDate(cleanText, result.date, true, existingReminder)
+          setStatus(`Updating "${existingReminder.text}"...`)
         } else {
           setPendingText(cleanText)
         }
+        return
+      } else {
+        // No matching reminder found
+        setStatus('No matching reminder found to update')
+        setTimeout(() => setStatus(null), 3000)
         return
       }
     }
@@ -400,12 +427,37 @@ export default function Home() {
     }
   }
 
-  const handleToggle = (id: string) => {
+  const handleToggle = async (id: string) => {
+    const reminder = reminders.find(r => r.id === id)
+    if (!reminder) return
+
+    const newCompletedState = !reminder.isCompleted
+
+    // Update local state
     setReminders(prev =>
       prev.map(r =>
-        r.id === id ? { ...r, isCompleted: !r.isCompleted } : r
+        r.id === id ? { ...r, isCompleted: newCompletedState } : r
       )
     )
+
+    // If marking as complete and has calendar event, offer to remove from calendar
+    if (newCompletedState && reminder.calendarEventId && isSignedIn()) {
+      try {
+        setStatus('Removing from calendar...')
+        await deleteCalendarEvent(reminder.calendarEventId)
+        // Clear the calendar event ID since it's deleted
+        setReminders(prev =>
+          prev.map(r =>
+            r.id === id ? { ...r, calendarEventId: undefined } : r
+          )
+        )
+        setStatus('Completed and removed from calendar')
+        setTimeout(() => setStatus(null), 2000)
+      } catch {
+        setStatus('Marked complete (calendar removal failed)')
+        setTimeout(() => setStatus(null), 2000)
+      }
+    }
   }
 
   const handleDelete = async (id: string) => {

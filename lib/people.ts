@@ -129,10 +129,10 @@ export function deletePerson(personId: string, email?: string): void {
 
 export function updatePerson(
   personId: string,
-  updates: Partial<Pick<Person, 'name' | 'avatarColor' | 'relationshipType' | 'birthday'>>,
-  email?: string
+  updates: Partial<Pick<Person, 'name' | 'avatarColor' | 'relationshipType' | 'birthday' | 'email'>>,
+  userEmail?: string
 ): void {
-  const people = loadPeople(email)
+  const people = loadPeople(userEmail)
   const person = people.find(p => p.id === personId)
 
   if (person) {
@@ -140,6 +140,7 @@ export function updatePerson(
     if (updates.avatarColor !== undefined) person.avatarColor = updates.avatarColor
     if (updates.relationshipType !== undefined) person.relationshipType = updates.relationshipType
     if (updates.birthday !== undefined) person.birthday = updates.birthday
-    savePeople(people, email)
+    if (updates.email !== undefined) person.email = updates.email?.trim() || undefined
+    savePeople(people, userEmail)
   }
 }

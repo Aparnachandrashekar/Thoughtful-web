@@ -10,6 +10,7 @@ export interface Person {
   avatarColor: AvatarColor      // blush | lavender | mint | peach | sky
   relationshipType: RelationshipType  // Required relationship type
   birthday?: string             // Optional birthday (ISO date string)
+  email?: string                // Optional email for calendar invites
 }
 
 export type AvatarColor = 'blush' | 'lavender' | 'mint' | 'peach' | 'sky'

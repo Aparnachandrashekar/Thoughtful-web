@@ -158,6 +158,8 @@ export async function createCalendarEvent(event: {
   title: string
   date: string
   recurrence?: RecurrenceOptions
+  addMeetLink?: boolean
+  attendeeEmail?: string
 }) {
   if (!accessToken) throw new Error('Not signed in')
 
@@ -195,9 +197,29 @@ export async function createCalendarEvent(event: {
     }
   }
 
+  // Add Google Meet link if requested
+  if (event.addMeetLink) {
+    eventBody.conferenceData = {
+      createRequest: {
+        requestId: `meet-${Date.now()}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' }
+      }
+    }
+  }
+
+  // Add attendee if email provided
+  if (event.attendeeEmail) {
+    eventBody.attendees = [{ email: event.attendeeEmail }]
+  }
+
   console.log('Creating calendar event:', JSON.stringify(eventBody, null, 2))
 
-  const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+  // Use conferenceDataVersion=1 if adding Meet link
+  const url = event.addMeetLink
+    ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
+    : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

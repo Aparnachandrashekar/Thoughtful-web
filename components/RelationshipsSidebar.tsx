@@ -2,19 +2,23 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Person } from '@/lib/types'
+import { Person, RELATIONSHIP_EMOJI } from '@/lib/types'
 import PersonAvatar from './PersonAvatar'
 
 interface RelationshipsSidebarProps {
   people: Person[]
   isOpen: boolean
   onToggle: () => void
+  userEmail?: string | null
+  onSignOut?: () => void
 }
 
 export default function RelationshipsSidebar({
   people,
   isOpen,
-  onToggle
+  onToggle,
+  userEmail,
+  onSignOut
 }: RelationshipsSidebarProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(true)
@@ -47,6 +51,7 @@ export default function RelationshipsSidebar({
           fixed md:relative inset-y-0 left-0 z-30
           w-64 bg-white/80 backdrop-blur-sm border-r border-gray-100
           transform transition-transform duration-200 ease-in-out
+          flex flex-col
           ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           md:block
         `}
@@ -62,7 +67,8 @@ export default function RelationshipsSidebar({
           </svg>
         </button>
 
-        <div className="p-4 pt-16 md:pt-4">
+        {/* Main content */}
+        <div className="flex-1 p-4 pt-16 md:pt-4 overflow-y-auto">
           {/* Collapsible Section Header */}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
@@ -94,16 +100,36 @@ export default function RelationshipsSidebar({
                   <button
                     key={person.id}
                     onClick={() => handlePersonClick(person.id)}
-                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-sand/50 transition-colors text-left"
+                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-sand/50 transition-colors text-left group"
                   >
                     <PersonAvatar name={person.name} color={person.avatarColor} size="sm" />
-                    <span className="text-sm text-gray-700 truncate">{person.name}</span>
+                    <span className="text-sm text-gray-700 truncate flex-1">{person.name}</span>
+                    <span className="text-sm opacity-60 group-hover:opacity-100 transition-opacity" title={person.relationshipType}>
+                      {RELATIONSHIP_EMOJI[person.relationshipType]}
+                    </span>
                   </button>
                 ))
               )}
             </div>
           )}
         </div>
+
+        {/* Bottom section with user info and sign out */}
+        {userEmail && onSignOut && (
+          <div className="p-4 border-t border-gray-100 bg-white/50">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-400 truncate">{userEmail}</p>
+              </div>
+              <button
+                onClick={onSignOut}
+                className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Mobile backdrop */}

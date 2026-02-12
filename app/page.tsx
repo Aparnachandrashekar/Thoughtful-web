@@ -482,6 +482,8 @@ export default function Home() {
           people={people}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
+          userEmail={userEmail}
+          onSignOut={handleGoogleSignOut}
         />
       )}
 
@@ -514,18 +516,6 @@ export default function Home() {
               </svg>
               Sign in with Google
             </button>
-          ) : signedIn ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-green-600 font-medium">
-                {userEmail}
-              </span>
-              <button
-                onClick={handleGoogleSignOut}
-                className="text-sm text-gray-500 hover:text-gray-700 underline"
-              >
-                Sign out
-              </button>
-            </div>
           ) : null}
         </div>
 

@@ -9,6 +9,7 @@ interface TemplateConfirmationModalProps {
   generatedText: string
   personName: string
   birthday?: string
+  personEmail?: string
   onConfirm: (data: {
     reminderText: string
     date: string
@@ -16,6 +17,7 @@ interface TemplateConfirmationModalProps {
     isRecurring: boolean
     recurrenceType: string | null
     recurrenceInterval: number
+    addMeetLink?: boolean
   }) => void
   onCancel: () => void
 }
@@ -25,6 +27,7 @@ export default function TemplateConfirmationModal({
   generatedText,
   personName,
   birthday,
+  personEmail,
   onConfirm,
   onCancel
 }: TemplateConfirmationModalProps) {
@@ -34,6 +37,7 @@ export default function TemplateConfirmationModal({
   const [date, setDate] = useState(nextDate.toISOString().split('T')[0])
   const [time, setTime] = useState('09:00')
   const [isRecurring, setIsRecurring] = useState(!!template.recurrence)
+  const [addMeetLink, setAddMeetLink] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   const recurrenceInfo = getRecurrenceInterval(template.recurrence)
@@ -46,7 +50,8 @@ export default function TemplateConfirmationModal({
       time,
       isRecurring,
       recurrenceType: isRecurring && recurrenceInfo ? recurrenceInfo.type : null,
-      recurrenceInterval: recurrenceInfo?.interval || 1
+      recurrenceInterval: recurrenceInfo?.interval || 1,
+      addMeetLink
     })
   }
 
@@ -153,6 +158,32 @@ export default function TemplateConfirmationModal({
               </div>
             </div>
           )}
+
+          {/* Google Meet Option */}
+          <div className="flex items-center gap-3 p-3 bg-sky/10 rounded-xl">
+            <span className="text-lg">📹</span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="meetLink"
+                  checked={addMeetLink}
+                  onChange={(e) => setAddMeetLink(e.target.checked)}
+                  className="w-4 h-4 text-lavender rounded border-gray-300 focus:ring-lavender"
+                />
+                <label htmlFor="meetLink" className="text-sm font-medium text-gray-700">
+                  Add Google Meet link
+                </label>
+              </div>
+              {addMeetLink && (
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  {personEmail
+                    ? `Invite will be sent to ${personEmail}`
+                    : `Add ${personName}'s email to send invite`}
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Summary */}
           <div className="text-center text-sm text-gray-500 py-2 border-t border-gray-100">

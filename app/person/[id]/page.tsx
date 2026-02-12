@@ -9,7 +9,7 @@ import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
 import { getPersonById, linkReminderToPerson, updatePerson } from '@/lib/people'
-import { getRemindersKey, getUserEmail, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
+import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
 function getCardColor(index: number): string {
@@ -47,6 +47,11 @@ export default function PersonProfilePage() {
     generatedText: string
   } | null>(null)
   const [showEditRelationship, setShowEditRelationship] = useState(false)
+  const [showEditEmail, setShowEditEmail] = useState(false)
+  const [editingEmail, setEditingEmail] = useState('')
+
+  // Tab for event history
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
   const loadReminders = useCallback(() => {
     try {
@@ -69,11 +74,11 @@ export default function PersonProfilePage() {
 
   // Load person data after email is determined
   useEffect(() => {
-    // Wait for email to be loaded from localStorage
     const email = getStoredEmail()
     const loadedPerson = getPersonById(personId, email || undefined)
     if (loadedPerson) {
       setPerson(loadedPerson)
+      setEditingEmail(loadedPerson.email || '')
       const allReminders = loadReminders()
       const linkedReminders = allReminders.filter((r: Reminder) =>
         loadedPerson.linkedReminderIds.includes(r.id) ||
@@ -100,6 +105,17 @@ export default function PersonProfilePage() {
       setPerson({ ...person, relationshipType, birthday })
       setShowEditRelationship(false)
       setStatus('Profile updated')
+      setTimeout(() => setStatus(null), 2000)
+    }
+  }
+
+  const handleSaveEmail = () => {
+    if (person) {
+      const emailToSave = editingEmail.trim() || undefined
+      updatePerson(person.id, { email: emailToSave }, userEmail || undefined)
+      setPerson({ ...person, email: emailToSave })
+      setShowEditEmail(false)
+      setStatus('Email updated')
       setTimeout(() => setStatus(null), 2000)
     }
   }
@@ -132,6 +148,7 @@ export default function PersonProfilePage() {
     isRecurring: boolean
     recurrenceType: string | null
     recurrenceInterval: number
+    addMeetLink?: boolean
   }) => {
     if (!person) return
 
@@ -155,20 +172,22 @@ export default function PersonProfilePage() {
       linkReminderToPerson(person.id, id, userEmail || undefined)
       setReminders(prev => [newReminder, ...prev])
 
-      if (isSignedIn() && data.isRecurring && data.recurrenceType) {
-        const recurrenceOptions: RecurrenceOptions = {
+      if (isSignedIn()) {
+        const recurrenceOptions: RecurrenceOptions | undefined = data.isRecurring && data.recurrenceType ? {
           type: data.recurrenceType as 'weekly' | 'monthly' | 'yearly',
           isBirthday: false,
           isAnniversary: false,
           endDate: null,
           interval: data.recurrenceInterval
-        }
+        } : undefined
 
         setStatus('Creating calendar event...')
         const result = await createCalendarEvent({
           title: friendlyTitle,
           date: dateTime.toISOString(),
-          recurrence: recurrenceOptions
+          recurrence: recurrenceOptions,
+          addMeetLink: data.addMeetLink,
+          attendeeEmail: data.addMeetLink ? person.email : undefined
         })
 
         if (result?.id) {
@@ -181,27 +200,11 @@ export default function PersonProfilePage() {
           ))
         }
 
-        setStatus('Reminder created')
-        setTimeout(() => setStatus(null), 2000)
-      } else if (isSignedIn()) {
-        setStatus('Creating calendar event...')
-        const result = await createCalendarEvent({
-          title: friendlyTitle,
-          date: dateTime.toISOString()
-        })
-
-        if (result?.id) {
-          const updated = updatedReminders.map(r =>
-            r.id === id ? { ...r, calendarEventId: result.id } : r
-          )
-          saveReminders(updated)
-          setReminders(prev => prev.map(r =>
-            r.id === id ? { ...r, calendarEventId: result.id } : r
-          ))
-        }
-
-        setStatus('Reminder created')
-        setTimeout(() => setStatus(null), 2000)
+        const statusMsg = data.addMeetLink
+          ? 'Reminder created with Google Meet link' + (person.email ? ` (invite sent to ${person.email})` : '')
+          : 'Reminder created'
+        setStatus(statusMsg)
+        setTimeout(() => setStatus(null), 3000)
       } else {
         setStatus('Saved locally')
         setTimeout(() => setStatus(null), 2000)
@@ -260,9 +263,16 @@ export default function PersonProfilePage() {
     )
   }
 
+  const now = new Date()
   const upcomingReminders = reminders
-    .filter(r => !r.isCompleted)
+    .filter(r => !r.isCompleted && r.date >= now)
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+
+  const pastReminders = reminders
+    .filter(r => r.isCompleted || r.date < now)
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+
+  const displayedReminders = activeTab === 'upcoming' ? upcomingReminders : pastReminders
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-sand/30">
@@ -287,7 +297,7 @@ export default function PersonProfilePage() {
               <h1 className="text-3xl md:text-4xl font-semibold text-gray-800 tracking-tight">
                 {person.name}
               </h1>
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center flex-wrap gap-3 mt-2">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-lavender/20 rounded-full text-sm">
                   <span>{RELATIONSHIP_EMOJI[person.relationshipType]}</span>
                   <span className="text-gray-600">{RELATIONSHIP_LABELS[person.relationshipType]}</span>
@@ -298,8 +308,47 @@ export default function PersonProfilePage() {
                   </span>
                 )}
               </div>
+
+              {/* Email section */}
+              <div className="mt-3 flex items-center gap-2">
+                {showEditEmail ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={editingEmail}
+                      onChange={(e) => setEditingEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:border-lavender focus:ring-1 focus:ring-lavender outline-none w-48"
+                    />
+                    <button
+                      onClick={handleSaveEmail}
+                      className="text-xs text-lavender hover:text-lavender/80 font-medium"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowEditEmail(false)
+                        setEditingEmail(person.email || '')
+                      }}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowEditEmail(true)}
+                    className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                  >
+                    <span>📧</span>
+                    <span>{person.email || 'Add email for calendar invites'}</span>
+                  </button>
+                )}
+              </div>
+
               <p className="text-gray-400 mt-2 text-sm">
-                {upcomingReminders.length} upcoming reminder{upcomingReminders.length !== 1 ? 's' : ''}
+                {upcomingReminders.length} upcoming · {pastReminders.length} past
               </p>
             </div>
           </div>
@@ -323,35 +372,61 @@ export default function PersonProfilePage() {
 
           {/* Reminders List */}
           <div className="lg:col-span-2 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-                Reminders
-              </h2>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                {upcomingReminders.length} active
-              </span>
+            {/* Tabs */}
+            <div className="flex items-center gap-4 border-b border-gray-100">
+              <button
+                onClick={() => setActiveTab('upcoming')}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'upcoming'
+                    ? 'text-gray-800'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Upcoming ({upcomingReminders.length})
+                {activeTab === 'upcoming' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lavender rounded-full" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('past')}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'past'
+                    ? 'text-gray-800'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                History ({pastReminders.length})
+                {activeTab === 'past' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lavender rounded-full" />
+                )}
+              </button>
             </div>
 
-            {upcomingReminders.length === 0 ? (
+            {displayedReminders.length === 0 ? (
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 text-center border border-gray-100 animate-fade-in">
-                <div className="text-4xl mb-3">✨</div>
-                <p className="text-gray-500 font-medium">No reminders yet</p>
+                <div className="text-4xl mb-3">{activeTab === 'upcoming' ? '✨' : '📚'}</div>
+                <p className="text-gray-500 font-medium">
+                  {activeTab === 'upcoming' ? 'No upcoming reminders' : 'No past reminders'}
+                </p>
                 <p className="text-gray-400 text-sm mt-1">
-                  Use the suggested actions to create one!
+                  {activeTab === 'upcoming'
+                    ? 'Use the suggested actions to create one!'
+                    : 'Completed reminders will appear here'}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingReminders.map((reminder, index) => (
+                {displayedReminders.map((reminder, index) => (
                   <div
                     key={reminder.id}
                     className={`${getCardColor(index)} p-4 rounded-2xl animate-slide-up
-                               hover:scale-[1.01] transition-all duration-200`}
+                               hover:scale-[1.01] transition-all duration-200
+                               ${reminder.isCompleted || reminder.date < now ? 'opacity-60' : ''}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-800 font-medium leading-snug">
+                        <p className={`text-gray-800 font-medium leading-snug ${reminder.isCompleted ? 'line-through' : ''}`}>
                           {reminder.text}
                           {reminder.isRecurring && (
                             <span className="ml-2 text-xs text-gray-400" title="Recurring">
@@ -361,6 +436,7 @@ export default function PersonProfilePage() {
                         </p>
                         <p className="text-sm text-gray-500 mt-1.5">
                           {formatDate(reminder.date)}
+                          {reminder.isCompleted && <span className="ml-2 text-green-600">✓ Done</span>}
                         </p>
                       </div>
                       <button
@@ -390,6 +466,16 @@ export default function PersonProfilePage() {
                 onEditRelationship={handleEditRelationship}
               />
 
+              {/* Email tip */}
+              {!person.email && (
+                <div className="mt-4 p-4 bg-mint/20 rounded-xl border border-mint/30">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    <span className="font-medium">💡 Tip:</span> Add {person.name}'s email to send them
+                    calendar invites with Google Meet links.
+                  </p>
+                </div>
+              )}
+
               {/* Tip */}
               <div className="mt-4 p-4 bg-white/40 rounded-xl border border-gray-100">
                 <p className="text-xs text-gray-400 leading-relaxed">
@@ -409,6 +495,7 @@ export default function PersonProfilePage() {
           generatedText={templateModal.generatedText}
           personName={person.name}
           birthday={person.birthday}
+          personEmail={person.email}
           onConfirm={handleConfirmTemplate}
           onCancel={() => setTemplateModal(null)}
         />

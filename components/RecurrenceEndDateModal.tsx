@@ -97,7 +97,7 @@ export default function RecurrenceEndDateModal({
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 px-4 py-2.5 text-white bg-lavender rounded-xl hover:bg-lavender/90 transition-colors"
+            className="flex-1 px-4 py-2.5 text-white bg-purple-600 rounded-xl hover:bg-purple-700 font-bold transition-colors shadow-md"
           >
             Confirm
           </button>

@@ -66,8 +66,8 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 px-4 py-3 text-gray-700 bg-lavender rounded-xl
-                       font-medium hover:bg-lavender/80 transition-colors active:scale-95"
+            className="flex-1 px-4 py-3 text-white bg-purple-600 rounded-xl
+                       font-bold hover:bg-purple-700 transition-colors active:scale-95 shadow-md"
           >
             Set Reminder
           </button>

@@ -201,9 +201,19 @@ export default function Home() {
     recurrenceOptions?: RecurrenceOptions
   ) => {
     try {
-      setStatus('Creating reminder...')
       const id = existingReminder?.id || Date.now().toString()
-      const friendlyTitle = await generateTitle(rawText)
+
+      // For updates, keep the existing title unless user explicitly changed it
+      // For new reminders, generate a friendly title
+      let friendlyTitle: string
+      if (isUpdate && existingReminder) {
+        setStatus(`Updating "${existingReminder.text}"...`)
+        // Keep the original title for updates (just changing date/time)
+        friendlyTitle = existingReminder.text
+      } else {
+        setStatus('Creating reminder...')
+        friendlyTitle = await generateTitle(rawText)
+      }
 
     const newReminder: Reminder = {
       id,
@@ -226,12 +236,24 @@ export default function Home() {
     if (isSignedIn()) {
       try {
         if (isUpdate && existingReminder?.calendarEventId) {
-          setStatus('Updating calendar event...')
           await updateCalendarEvent(existingReminder.calendarEventId, {
             title: friendlyTitle,
             date: date.toISOString()
           })
-          setStatus('Calendar event updated')
+          setStatus(`Updated "${friendlyTitle}" to ${date.toLocaleString()}`)
+        } else if (isUpdate && existingReminder) {
+          // Update exists locally but no calendar event - create one
+          const result = await createCalendarEvent({
+            title: friendlyTitle,
+            date: date.toISOString(),
+            recurrence: recurrenceOptions
+          })
+          if (result?.id) {
+            setReminders(prev => prev.map(r =>
+              r.id === id ? { ...r, calendarEventId: result.id } : r
+            ))
+          }
+          setStatus(`Updated and synced to calendar`)
         } else {
           const statusMsg = recurrenceOptions?.type
             ? `Creating recurring ${recurrenceOptions.isBirthday ? 'birthday' : recurrenceOptions.isAnniversary ? 'anniversary' : ''} event...`
@@ -324,8 +346,9 @@ export default function Home() {
         const result = parseReminder(cleanText)
         if (result.date) {
           addReminderWithDate(cleanText, result.date, true, existingReminder)
-          setStatus(`Updating "${existingReminder.text}"...`)
         } else {
+          // No date found - open date picker for the update
+          setStatus(`Select new date/time for "${existingReminder.text}"`)
           setPendingText(cleanText)
         }
         return

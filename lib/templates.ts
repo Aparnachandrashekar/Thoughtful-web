@@ -33,10 +33,18 @@ const FAMILY_TEMPLATES: CareTemplate[] = [
 
 const CLOSE_FRIEND_TEMPLATES: CareTemplate[] = [
   {
-    id: 'close-friend-monthly',
-    label: 'Monthly catch-up',
-    emoji: '☕',
+    id: 'close-friend-weekly',
+    label: 'Weekly catch-up',
+    emoji: '📞',
     textTemplate: 'Catch up with {name}',
+    recurrence: 'weekly',
+    description: 'Stay close with weekly check-ins'
+  },
+  {
+    id: 'close-friend-monthly',
+    label: 'Monthly hangout',
+    emoji: '☕',
+    textTemplate: 'Plan hangout with {name}',
     recurrence: 'monthly',
     description: 'Keep the friendship strong'
   },
@@ -60,6 +68,14 @@ const CLOSE_FRIEND_TEMPLATES: CareTemplate[] = [
 ]
 
 const FRIEND_TEMPLATES: CareTemplate[] = [
+  {
+    id: 'friend-monthly',
+    label: 'Monthly catch-up',
+    emoji: '💬',
+    textTemplate: 'Catch up with {name}',
+    recurrence: 'monthly',
+    description: 'Keep the connection alive'
+  },
   {
     id: 'friend-quarterly',
     label: 'Quarterly check-in',

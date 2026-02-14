@@ -62,7 +62,7 @@ export default function PersonConfirmationModal({
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 py-2.5 px-4 bg-lavender text-gray-800 rounded-xl hover:bg-lavender/80 font-medium text-sm transition-all"
+              className="flex-1 py-2.5 px-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-md"
             >
               Yes, create profile
             </button>

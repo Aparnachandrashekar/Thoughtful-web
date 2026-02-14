@@ -1,5 +1,26 @@
 import * as chrono from 'chrono-node'
 
+// Preprocess time formats that chrono struggles with
+function preprocessTimeFormats(text: string): string {
+  let processed = text
+
+  // Fix malformed times like "7:PM" → "7PM", "3:AM" → "3AM"
+  processed = processed.replace(/(\d{1,2}):([AP]M)/gi, '$1$2')
+
+  // Fix "7: PM" or "7 :PM" → "7PM"
+  processed = processed.replace(/(\d{1,2})\s*:\s*([AP]M)/gi, '$1$2')
+
+  // Add "at" before standalone times like "5:00" or "5:00PM" that don't have context
+  // This helps chrono parse them correctly
+  processed = processed.replace(/\b(\d{1,2}:\d{2})\s*(am|pm)?\b(?!\s*(am|pm))/gi, (match, time, meridiem) => {
+    // If there's already a meridiem or the word "at" before, don't modify
+    if (processed.indexOf('at ' + match) !== -1) return match
+    return 'at ' + time + (meridiem || '')
+  })
+
+  return processed
+}
+
 export interface RecurrenceInfo {
   type: 'yearly' | 'monthly' | 'weekly' | 'daily' | null
   isBirthday: boolean
@@ -237,8 +258,19 @@ function detectRecurrence(text: string): RecurrenceInfo {
     return { type: 'weekly', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
   }
 
-  if (/\b(every\s+day|daily)\b/i.test(text)) {
-    return { type: 'daily', isBirthday: false, isAnniversary: false, needsEndDate: !untilDate, untilDate }
+  if (/\b(every\s*day|everyday|daily)\b/i.test(text)) {
+    // Calculate tomorrow as first occurrence for daily
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(8, 0, 0, 0)
+    return {
+      type: 'daily',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      untilDate,
+      calculatedDate: tomorrow
+    }
   }
 
   return { type: null, isBirthday: false, isAnniversary: false, needsEndDate: false }
@@ -251,7 +283,7 @@ function cleanRecurrenceFromTitle(title: string): string {
     .replace(/\b(every\s+year|yearly|annual|annually)\b/gi, '')
     .replace(/\b(every\s+month|monthly)\b/gi, '')
     .replace(/\b(every\s+week|weekly)\b/gi, '')
-    .replace(/\b(every\s+day|daily)\b/gi, '')
+    .replace(/\b(every\s*day|everyday|daily)\b/gi, '')
     // Every [day] pattern (with optional 's' at end)
     .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
     // Alternating patterns
@@ -413,8 +445,9 @@ export function parseReminder(text: string): ParseResult {
     }
   }
 
-  // Preprocess to handle negations
-  const processedText = preprocessText(text)
+  // Preprocess to handle negations and fix time formats
+  let processedText = preprocessText(text)
+  processedText = preprocessTimeFormats(processedText)
 
   const parsed = chrono.parse(processedText)
 

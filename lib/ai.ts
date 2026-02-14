@@ -67,7 +67,7 @@ function basicTitleExtraction(text: string): string {
     .replace(/\b(last|first|second|third|fourth)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)(?:day)?\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')
     .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')
     .replace(/\b\d{1,2}(?:st|nd|rd|th)?\s+of\s+every\s+month\b/gi, '')
-    .replace(/\b(every\s+year|yearly|annual|monthly|weekly|daily)\b/gi, '')
+    .replace(/\b(every\s+year|yearly|annual|monthly|weekly|every\s*day|everyday|daily)\b/gi, '')
     .replace(/\b(alternating|every\s+other)\s+\w+s?\b/gi, '')
     .replace(/\buntil\s+.+?(?:\s*$|,|\.|;)/gi, '')
     // Remove dates/times

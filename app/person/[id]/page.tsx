@@ -9,17 +9,12 @@ import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
 import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
-import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions } from '@/lib/google'
+import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 
 function getCardColor(index: number): string {
   const colors = ['bg-blush/60', 'bg-lavender/60', 'bg-mint/60', 'bg-peach/60', 'bg-sky/60']
   return colors[index % colors.length]
-}
-
-function getStoredEmail(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('thoughtful-google-email')
 }
 
 export default function PersonProfilePage() {

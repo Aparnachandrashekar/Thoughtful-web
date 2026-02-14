@@ -22,11 +22,11 @@ export function loadPeople(email?: string): Person[] {
   try {
     const people = JSON.parse(stored) as Person[]
 
-    // Migrate existing profiles without relationshipType to 'other'
+    // Migrate existing profiles without relationshipType to 'close_friend'
     let needsSave = false
     for (const person of people) {
       if (!person.relationshipType) {
-        person.relationshipType = 'other'
+        person.relationshipType = 'close_friend'
         needsSave = true
       }
     }
@@ -115,7 +115,7 @@ export function getPersonById(personId: string, email?: string): Person | undefi
 
   // Ensure relationshipType exists (migration for existing data)
   if (person && !person.relationshipType) {
-    person.relationshipType = 'other'
+    person.relationshipType = 'close_friend'
   }
 
   return person

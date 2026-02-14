@@ -147,13 +147,13 @@ export default function Home() {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
 
-  // Handle person confirmation - create profile with default 'other' type
+  // Handle person confirmation - create profile with default 'close_friend' type
   // User can edit relationship type later from profile page
   const handleConfirmPerson = useCallback(() => {
     if (pendingNameConfirmation) {
       const newPerson = createPerson(
         pendingNameConfirmation.detectedName.name,
-        'other',  // Default relationship type - can be edited later
+        'close_friend',  // Default relationship type - can be edited later
         userEmail || undefined
       )
       if (pendingNameConfirmation.reminderId) {

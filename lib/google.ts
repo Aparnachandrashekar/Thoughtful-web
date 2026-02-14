@@ -93,8 +93,16 @@ export function getUserEmail() {
   return userEmail
 }
 
+// Get stored email directly from localStorage (works even before auth initializes)
+export function getStoredEmail(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(USER_EMAIL_KEY)
+}
+
 export function getRemindersKey(): string {
-  return userEmail ? `thoughtful-reminders-${userEmail}` : 'thoughtful-reminders'
+  // First try the in-memory userEmail, then fall back to localStorage
+  const email = userEmail || getStoredEmail()
+  return email ? `thoughtful-reminders-${email}` : 'thoughtful-reminders'
 }
 
 export interface RecurrenceOptions {

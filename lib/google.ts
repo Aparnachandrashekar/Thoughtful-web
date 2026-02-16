@@ -85,8 +85,27 @@ export function signOut() {
   localStorage.removeItem(USER_EMAIL_KEY)
 }
 
-export function isSignedIn() {
-  return !!accessToken
+export function isSignedIn(): boolean {
+  // Check in-memory token first, then localStorage
+  if (accessToken) return true
+
+  // Try to restore from localStorage if not in memory
+  if (typeof window !== 'undefined') {
+    const savedToken = localStorage.getItem(TOKEN_KEY)
+    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+
+    if (savedToken && savedExpiry) {
+      const expiryTime = parseInt(savedExpiry, 10)
+      if (Date.now() < expiryTime) {
+        // Restore token to memory
+        accessToken = savedToken
+        userEmail = localStorage.getItem(USER_EMAIL_KEY)
+        return true
+      }
+    }
+  }
+
+  return false
 }
 
 export function getUserEmail() {
@@ -169,7 +188,13 @@ export async function createCalendarEvent(event: {
   addMeetLink?: boolean
   attendeeEmail?: string
 }) {
-  if (!accessToken) throw new Error('Not signed in')
+  // Ensure we have a valid token
+  if (!isSignedIn()) {
+    console.error('createCalendarEvent: Not signed in, accessToken:', !!accessToken)
+    throw new Error('Not signed in')
+  }
+
+  console.log('createCalendarEvent: Using token:', accessToken?.substring(0, 20) + '...')
 
   // Get user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone

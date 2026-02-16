@@ -150,17 +150,22 @@ export default function Home() {
   // Handle person confirmation - create profile with default 'close_friend' type
   // User can edit relationship type later from profile page
   const handleConfirmPerson = useCallback(() => {
+    console.log('handleConfirmPerson called, pendingNameConfirmation:', pendingNameConfirmation)
     if (pendingNameConfirmation) {
+      console.log('Creating person:', pendingNameConfirmation.detectedName.name, 'email:', userEmail)
       const newPerson = createPerson(
         pendingNameConfirmation.detectedName.name,
         'close_friend',  // Default relationship type - can be edited later
         userEmail || undefined
       )
+      console.log('Person created:', newPerson)
       if (pendingNameConfirmation.reminderId) {
         linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
+        console.log('Linked reminder to person')
       }
       refreshPeople()
       setPendingNameConfirmation(null)
+      console.log('Profile creation complete')
     }
   }, [pendingNameConfirmation, userEmail, refreshPeople])
 

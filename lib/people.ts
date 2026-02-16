@@ -61,7 +61,9 @@ export function createPerson(
   email?: string,
   birthday?: string
 ): Person {
+  console.log('createPerson called:', { name, relationshipType, email, birthday })
   const people = loadPeople(email)
+  console.log('Existing people:', people.length)
 
   // Pick a color that's least used
   const colorCounts = AVATAR_COLORS.reduce((acc, color) => {
@@ -85,6 +87,8 @@ export function createPerson(
 
   people.push(newPerson)
   savePeople(people, email)
+  console.log('Person saved to localStorage, key:', email ? `thoughtful-people-${email}` : 'thoughtful-people')
+  console.log('New person:', newPerson)
 
   return newPerson
 }

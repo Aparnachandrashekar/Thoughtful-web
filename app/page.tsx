@@ -200,20 +200,24 @@ export default function Home() {
     existingReminder?: Reminder,
     recurrenceOptions?: RecurrenceOptions
   ) => {
-    try {
-      const id = existingReminder?.id || Date.now().toString()
+    const id = existingReminder?.id || Date.now().toString()
 
-      // For updates, keep the existing title unless user explicitly changed it
-      // For new reminders, generate a friendly title
-      let friendlyTitle: string
-      if (isUpdate && existingReminder) {
-        setStatus(`Updating "${existingReminder.text}"...`)
-        // Keep the original title for updates (just changing date/time)
-        friendlyTitle = existingReminder.text
-      } else {
-        setStatus('Creating reminder...')
+    // For updates, keep the existing title unless user explicitly changed it
+    // For new reminders, generate a friendly title
+    let friendlyTitle: string
+    if (isUpdate && existingReminder) {
+      setStatus(`Updating "${existingReminder.text}"...`)
+      friendlyTitle = existingReminder.text
+    } else {
+      setStatus('Creating reminder...')
+      try {
         friendlyTitle = await generateTitle(rawText)
+      } catch (e) {
+        console.error('Title generation failed:', e)
+        // Fallback to raw text if title generation fails
+        friendlyTitle = rawText
       }
+    }
 
     const newReminder: Reminder = {
       id,
@@ -230,6 +234,30 @@ export default function Home() {
       setReminders(prev => prev.map(r => r.id === id ? newReminder : r))
     } else {
       setReminders(prev => [newReminder, ...prev])
+    }
+
+    // Detect names for person profile creation BEFORE calendar sync
+    // This ensures profile creation works even if calendar fails
+    if (!isUpdate) {
+      const detectedName = getPrimaryDetectedName(rawText)
+      console.log('Detected name:', detectedName)
+      if (detectedName) {
+        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
+        console.log('Existing person:', existingPerson)
+        if (existingPerson) {
+          // Auto-link to existing person
+          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
+          refreshPeople()
+        } else {
+          // Show confirmation modal for new person
+          console.log('Setting pending name confirmation:', detectedName)
+          setPendingNameConfirmation({
+            detectedName,
+            reminderId: id,
+            originalText: rawText
+          })
+        }
+      }
     }
 
     // Sync with Google Calendar if signed in
@@ -280,37 +308,13 @@ export default function Home() {
           setStatus(successMsg)
         }
         setTimeout(() => setStatus(null), 3000)
-      } catch {
+      } catch (e) {
+        console.error('Calendar sync failed:', e)
         setStatus('Saved locally (calendar sync failed)')
         setTimeout(() => setStatus(null), 3000)
       }
     } else {
       setStatus('Saved locally. Sign in to Google for calendar reminders.')
-      setTimeout(() => setStatus(null), 3000)
-    }
-
-    // Detect names for person profile creation (only for new reminders)
-    if (!isUpdate) {
-      const detectedName = getPrimaryDetectedName(rawText)
-      if (detectedName) {
-        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
-        if (existingPerson) {
-          // Auto-link to existing person
-          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
-          refreshPeople()
-        } else {
-          // Show confirmation modal for new person
-          setPendingNameConfirmation({
-            detectedName,
-            reminderId: id,
-            originalText: rawText
-          })
-        }
-      }
-    }
-    } catch (error) {
-      console.error('Error creating reminder:', error)
-      setStatus('Error creating reminder. Please try again.')
       setTimeout(() => setStatus(null), 3000)
     }
   }, [userEmail, refreshPeople])

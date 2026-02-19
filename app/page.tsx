@@ -30,6 +30,7 @@ import {
   subscribePeople,
   addPerson as addPersonDB,
   updatePersonDoc,
+  migrateLocalStorageToFirestore,
 } from '@/lib/db'
 
 const AVATAR_COLORS: AvatarColor[] = ['blush', 'lavender', 'mint', 'peach', 'sky']
@@ -145,8 +146,12 @@ export default function Home() {
       return
     }
 
-    unsubReminders.current = subscribeReminders(userEmail, setReminders)
-    unsubPeople.current = subscribePeople(userEmail, setPeople)
+    // Migrate localStorage data to Firestore (one-time), then subscribe
+    migrateLocalStorageToFirestore(userEmail).then(() => {
+      if (!userEmail) return
+      unsubReminders.current = subscribeReminders(userEmail, setReminders)
+      unsubPeople.current = subscribePeople(userEmail, setPeople)
+    })
 
     return () => {
       if (unsubReminders.current) unsubReminders.current()

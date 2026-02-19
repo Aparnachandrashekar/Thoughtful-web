@@ -271,15 +271,8 @@ export async function createCalendarEvent(event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    const msg = err.error?.message || `Calendar API ${res.status}`
+    const msg = err.error?.message || `Calendar API error (${res.status})`
     console.error('Calendar API error:', res.status, err)
-    if (res.status === 401) {
-      // Clear stale token so isSignedIn() won't return true with a bad token
-      accessToken = null
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      throw new Error('Session expired — please sign out and sign back in')
-    }
     throw new Error(msg)
   }
 
@@ -291,7 +284,7 @@ export async function updateCalendarEvent(eventId: string, event: {
   date: string
 }) {
   const token = getAccessToken()
-  if (!token) throw new Error('Session expired — please sign out and sign back in')
+  if (!token) throw new Error('No access token — try signing out and back in')
 
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
@@ -311,13 +304,7 @@ export async function updateCalendarEvent(eventId: string, event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    if (res.status === 401) {
-      accessToken = null
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      throw new Error('Session expired — please sign out and sign back in')
-    }
-    throw new Error(err.error?.message || 'Failed to update event')
+    throw new Error(err.error?.message || `Calendar update failed (${res.status})`)
   }
 
   return res.json()
@@ -327,17 +314,11 @@ export async function deleteCalendarEvent(eventId: string) {
   const token = getAccessToken()
   if (!token) return
 
-  const res = await fetch(
+  await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
     {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     }
   )
-
-  if (res.status === 401) {
-    accessToken = null
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(TOKEN_EXPIRY_KEY)
-  }
 }

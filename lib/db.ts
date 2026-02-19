@@ -5,6 +5,7 @@ import {
   updateDoc,
   deleteDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   Unsubscribe,
@@ -12,6 +13,86 @@ import {
 import { db } from './firebase'
 import { Reminder } from '@/components/ReminderList'
 import { Person } from './types'
+
+// --- One-time migration from localStorage to Firestore ---
+
+const MIGRATION_KEY = 'thoughtful-firestore-migrated'
+
+export async function migrateLocalStorageToFirestore(email: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+
+  // Check if already migrated for this email
+  const migrated = localStorage.getItem(`${MIGRATION_KEY}-${email}`)
+  if (migrated) return false
+
+  // Check if Firestore already has data (don't overwrite)
+  const existingReminders = await getDocs(query(remindersCol(email)))
+  if (!existingReminders.empty) {
+    // Firestore already has data, mark as migrated
+    localStorage.setItem(`${MIGRATION_KEY}-${email}`, 'true')
+    return false
+  }
+
+  let didMigrate = false
+
+  // Migrate reminders
+  const remindersKey = `thoughtful-reminders-${email}`
+  const savedReminders = localStorage.getItem(remindersKey)
+  if (savedReminders) {
+    try {
+      const parsed = JSON.parse(savedReminders)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        for (const r of parsed) {
+          const ref = doc(remindersCol(email), r.id)
+          await setDoc(ref, {
+            text: r.text,
+            date: typeof r.date === 'string' ? r.date : new Date(r.date).toISOString(),
+            isCompleted: r.isCompleted ?? false,
+            calendarEventId: r.calendarEventId ?? null,
+            isRecurring: r.isRecurring ?? false,
+            isBirthday: r.isBirthday ?? false,
+            isAnniversary: r.isAnniversary ?? false,
+          })
+        }
+        didMigrate = true
+        console.log(`Migrated ${parsed.length} reminders to Firestore`)
+      }
+    } catch (e) {
+      console.error('Failed to migrate reminders:', e)
+    }
+  }
+
+  // Migrate people
+  const peopleKey = `thoughtful-people-${email}`
+  const savedPeople = localStorage.getItem(peopleKey)
+  if (savedPeople) {
+    try {
+      const parsed = JSON.parse(savedPeople)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        for (const p of parsed) {
+          const ref = doc(peopleCol(email), p.id)
+          await setDoc(ref, {
+            name: p.name,
+            linkedReminderIds: p.linkedReminderIds ?? [],
+            createdAt: p.createdAt,
+            avatarColor: p.avatarColor,
+            relationshipType: p.relationshipType ?? 'close_friend',
+            birthday: p.birthday ?? null,
+            email: p.email ?? null,
+          })
+        }
+        didMigrate = true
+        console.log(`Migrated ${parsed.length} people to Firestore`)
+      }
+    } catch (e) {
+      console.error('Failed to migrate people:', e)
+    }
+  }
+
+  // Mark as migrated
+  localStorage.setItem(`${MIGRATION_KEY}-${email}`, 'true')
+  return didMigrate
+}
 
 // --- Reminders ---
 

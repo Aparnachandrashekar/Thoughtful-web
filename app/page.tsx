@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
@@ -14,16 +14,25 @@ import {
   signOut,
   isSignedIn,
   getUserEmail,
-  getRemindersKey,
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
   RecurrenceOptions
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
-import { Person, DetectedName } from '@/lib/types'
-import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
+import { Person, DetectedName, AvatarColor } from '@/lib/types'
 import { getPrimaryDetectedName } from '@/lib/personDetection'
+import {
+  subscribeReminders,
+  addReminder as addReminderDB,
+  updateReminder as updateReminderDB,
+  deleteReminder as deleteReminderDB,
+  subscribePeople,
+  addPerson as addPersonDB,
+  updatePersonDoc,
+} from '@/lib/db'
+
+const AVATAR_COLORS: AvatarColor[] = ['blush', 'lavender', 'mint', 'peach', 'sky']
 
 // Helper to generate human-readable pattern description
 function getPatternDescription(recurrence: RecurrenceInfo): string {
@@ -51,6 +60,9 @@ function getPatternDescription(recurrence: RecurrenceInfo): string {
     const day = dayNames[recurrence.byDay] || recurrence.byDay
     return `every ${day}`
   }
+  if (recurrence.type === 'daily' && recurrence.interval && recurrence.interval > 1) {
+    return `every ${recurrence.interval} days`
+  }
   return recurrence.type || 'recurring'
 }
 
@@ -75,33 +87,16 @@ export default function Home() {
   // People/Relationships state
   const [people, setPeople] = useState<Person[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [pendingNameConfirmation, setPendingNameConfirmation] = useState<{
     detectedName: DetectedName
     reminderId?: string
     originalText?: string
   } | null>(null)
 
-  // Load reminders for current user
-  const loadReminders = useCallback(() => {
-    try {
-      const key = getRemindersKey()
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
-          return
-        }
-      }
-    } catch {}
-    setReminders([])
-  }, [])
-
-  // Save reminders for current user
-  const saveReminders = useCallback((newReminders: Reminder[]) => {
-    const key = getRemindersKey()
-    localStorage.setItem(key, JSON.stringify(newReminders))
-  }, [])
+  // Refs for Firestore unsubscribe functions
+  const unsubReminders = useRef<(() => void) | null>(null)
+  const unsubPeople = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -115,12 +110,16 @@ export default function Home() {
         if (clientId) {
           initGoogleAuth(clientId)
           setGoogleReady(true)
-          // Check if already signed in (from localStorage)
+          // Restore auth state from localStorage
           if (isSignedIn()) {
+            const email = getUserEmail()
             setSignedIn(true)
-            setUserEmail(getUserEmail())
+            setUserEmail(email)
           }
         }
+      }
+      script.onerror = () => {
+        console.error('Failed to load Google Identity Services script')
       }
       document.head.appendChild(script)
     } catch {
@@ -128,57 +127,91 @@ export default function Home() {
     }
   }, [])
 
-  // Load reminders when user changes or on mount
+  // Subscribe to Firestore reminders & people when userEmail changes
   useEffect(() => {
-    if (mounted) {
-      loadReminders()
+    // Cleanup previous subscriptions
+    if (unsubReminders.current) {
+      unsubReminders.current()
+      unsubReminders.current = null
     }
-  }, [mounted, userEmail, loadReminders])
-
-  // Load people when user changes
-  useEffect(() => {
-    if (mounted) {
-      setPeople(loadPeople(userEmail || undefined))
+    if (unsubPeople.current) {
+      unsubPeople.current()
+      unsubPeople.current = null
     }
-  }, [mounted, userEmail])
 
-  // Refresh people list
-  const refreshPeople = useCallback(() => {
-    setPeople(loadPeople(userEmail || undefined))
+    if (!userEmail) {
+      setReminders([])
+      setPeople([])
+      return
+    }
+
+    unsubReminders.current = subscribeReminders(userEmail, setReminders)
+    unsubPeople.current = subscribePeople(userEmail, setPeople)
+
+    return () => {
+      if (unsubReminders.current) unsubReminders.current()
+      if (unsubPeople.current) unsubPeople.current()
+    }
   }, [userEmail])
 
   // Handle person confirmation - create profile with default 'close_friend' type
-  // User can edit relationship type later from profile page
-  const handleConfirmPerson = useCallback(() => {
-    console.log('handleConfirmPerson called, pendingNameConfirmation:', pendingNameConfirmation)
-    if (pendingNameConfirmation) {
-      console.log('Creating person:', pendingNameConfirmation.detectedName.name, 'email:', userEmail)
-      const newPerson = createPerson(
-        pendingNameConfirmation.detectedName.name,
-        'close_friend',  // Default relationship type - can be edited later
-        userEmail || undefined
-      )
-      console.log('Person created:', newPerson)
-      if (pendingNameConfirmation.reminderId) {
-        linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
-        console.log('Linked reminder to person')
-      }
-      refreshPeople()
+  const handleConfirmPerson = useCallback(async () => {
+    if (!pendingNameConfirmation || isCreatingProfile) return
+
+    if (!userEmail) {
+      console.error('Cannot create profile: no user email')
       setPendingNameConfirmation(null)
-      console.log('Profile creation complete')
+      return
     }
-  }, [pendingNameConfirmation, userEmail, refreshPeople])
+
+    setIsCreatingProfile(true)
+
+    try {
+      // Dedup: check if person already exists in current people state
+      const normalizedName = pendingNameConfirmation.detectedName.name.toLowerCase().trim()
+      const existing = people.find(p => p.name.toLowerCase().trim() === normalizedName)
+
+      let person: Person
+      if (existing) {
+        person = existing
+      } else {
+        // Pick a color that's least used
+        const colorCounts = AVATAR_COLORS.reduce((acc, color) => {
+          acc[color] = people.filter(p => p.avatarColor === color).length
+          return acc
+        }, {} as Record<AvatarColor, number>)
+        const leastUsedColor = AVATAR_COLORS.reduce((min, color) =>
+          colorCounts[color] < colorCounts[min] ? color : min
+        , AVATAR_COLORS[0])
+
+        person = {
+          id: Date.now().toString(),
+          name: pendingNameConfirmation.detectedName.name.trim(),
+          linkedReminderIds: [],
+          createdAt: new Date().toISOString(),
+          avatarColor: leastUsedColor,
+          relationshipType: 'close_friend',
+        }
+        await addPersonDB(userEmail, person)
+      }
+
+      // Link reminder to person
+      if (pendingNameConfirmation.reminderId) {
+        const updatedIds = [...person.linkedReminderIds]
+        if (!updatedIds.includes(pendingNameConfirmation.reminderId)) {
+          updatedIds.push(pendingNameConfirmation.reminderId)
+          await updatePersonDoc(userEmail, person.id, { linkedReminderIds: updatedIds })
+        }
+      }
+    } finally {
+      setPendingNameConfirmation(null)
+      setIsCreatingProfile(false)
+    }
+  }, [pendingNameConfirmation, userEmail, people, isCreatingProfile])
 
   const handleDenyPerson = useCallback(() => {
     setPendingNameConfirmation(null)
   }, [])
-
-  // Persist reminders to localStorage when they change
-  useEffect(() => {
-    if (mounted && reminders.length >= 0) {
-      saveReminders(reminders)
-    }
-  }, [reminders, mounted, saveReminders])
 
   const handleGoogleSignIn = () => {
     signIn((email) => {
@@ -199,16 +232,16 @@ export default function Home() {
   }
 
   const addReminderWithDate = useCallback(async (
-    rawText: string,  // Original user input for AI title generation
+    rawText: string,
     date: Date,
     isUpdate = false,
     existingReminder?: Reminder,
     recurrenceOptions?: RecurrenceOptions
   ) => {
+    if (!userEmail) return
+
     const id = existingReminder?.id || Date.now().toString()
 
-    // For updates, keep the existing title unless user explicitly changed it
-    // For new reminders, generate a friendly title
     let friendlyTitle: string
     if (isUpdate && existingReminder) {
       setStatus(`Updating "${existingReminder.text}"...`)
@@ -219,7 +252,6 @@ export default function Home() {
         friendlyTitle = await generateTitle(rawText)
       } catch (e) {
         console.error('Title generation failed:', e)
-        // Fallback to raw text if title generation fails
         friendlyTitle = rawText
       }
     }
@@ -235,27 +267,23 @@ export default function Home() {
       isAnniversary: recurrenceOptions?.isAnniversary,
     }
 
-    if (isUpdate && existingReminder) {
-      setReminders(prev => prev.map(r => r.id === id ? newReminder : r))
-    } else {
-      setReminders(prev => [newReminder, ...prev])
-    }
+    // Write to Firestore (onSnapshot will update local state)
+    await addReminderDB(userEmail, newReminder)
 
-    // Detect names for person profile creation BEFORE calendar sync
-    // This ensures profile creation works even if calendar fails
+    // Detect names for person profile creation
     if (!isUpdate) {
       const detectedName = getPrimaryDetectedName(rawText)
-      console.log('Detected name:', detectedName)
       if (detectedName) {
-        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
-        console.log('Existing person:', existingPerson)
+        const normalizedName = detectedName.name.toLowerCase().trim()
+        const existingPerson = people.find(p => p.name.toLowerCase().trim() === normalizedName)
         if (existingPerson) {
           // Auto-link to existing person
-          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
-          refreshPeople()
+          const updatedIds = [...existingPerson.linkedReminderIds]
+          if (!updatedIds.includes(id)) {
+            updatedIds.push(id)
+            await updatePersonDoc(userEmail, existingPerson.id, { linkedReminderIds: updatedIds })
+          }
         } else {
-          // Show confirmation modal for new person
-          console.log('Setting pending name confirmation:', detectedName)
           setPendingNameConfirmation({
             detectedName,
             reminderId: id,
@@ -275,16 +303,13 @@ export default function Home() {
           })
           setStatus(`Updated "${friendlyTitle}" to ${date.toLocaleString()}`)
         } else if (isUpdate && existingReminder) {
-          // Update exists locally but no calendar event - create one
           const result = await createCalendarEvent({
             title: friendlyTitle,
             date: date.toISOString(),
             recurrence: recurrenceOptions
           })
           if (result?.id) {
-            setReminders(prev => prev.map(r =>
-              r.id === id ? { ...r, calendarEventId: result.id } : r
-            ))
+            await updateReminderDB(userEmail, id, { calendarEventId: result.id })
           }
           setStatus(`Updated and synced to calendar`)
         } else {
@@ -297,11 +322,8 @@ export default function Home() {
             date: date.toISOString(),
             recurrence: recurrenceOptions
           })
-          // Store the calendar event ID
           if (result?.id) {
-            setReminders(prev => prev.map(r =>
-              r.id === id ? { ...r, calendarEventId: result.id } : r
-            ))
+            await updateReminderDB(userEmail, id, { calendarEventId: result.id })
           }
           const successMsg = recurrenceOptions?.isBirthday
             ? 'Birthday reminder created (yearly, with 1-day advance notice)'
@@ -315,36 +337,29 @@ export default function Home() {
         setTimeout(() => setStatus(null), 3000)
       } catch (e) {
         console.error('Calendar sync failed:', e)
-        setStatus('Saved locally (calendar sync failed)')
+        setStatus('Saved (calendar sync failed)')
         setTimeout(() => setStatus(null), 3000)
       }
     } else {
-      setStatus('Saved locally. Sign in to Google for calendar reminders.')
+      setStatus('Saved. Sign in to Google for calendar reminders.')
       setTimeout(() => setStatus(null), 3000)
     }
-  }, [userEmail, refreshPeople])
+  }, [userEmail, people])
 
   const handleAddReminder = (text: string) => {
-    // Check if this is an update request
     const lowerText = text.toLowerCase()
     const isUpdateRequest = lowerText.includes('update')
 
     if (isUpdateRequest) {
-      // Find matching reminder by keyword
-      // Format: "update [reminder name] to [new time/date]"
       const cleanText = text.replace(/update/gi, '').trim()
 
-      // Try to find the best matching reminder
       const existingReminder = reminders.find(r => {
         const reminderWords = r.text.toLowerCase().split(/\s+/)
         const inputWords = cleanText.toLowerCase().split(/\s+/)
 
-        // Check if reminder name is contained in the input
-        // e.g., "call mom to 4pm" should match reminder "Call mom"
         const reminderName = r.text.toLowerCase()
         if (cleanText.toLowerCase().includes(reminderName)) return true
 
-        // Check if first few words match (flexible matching)
         const matchWords = reminderWords.slice(0, 3).filter(w =>
           !['at', 'on', 'to', 'the', 'a', 'an'].includes(w)
         )
@@ -356,13 +371,11 @@ export default function Home() {
         if (result.date) {
           addReminderWithDate(cleanText, result.date, true, existingReminder)
         } else {
-          // No date found - open date picker for the update
           setStatus(`Select new date/time for "${existingReminder.text}"`)
           setPendingText(cleanText)
         }
         return
       } else {
-        // No matching reminder found
         setStatus('No matching reminder found to update')
         setTimeout(() => setStatus(null), 3000)
         return
@@ -370,24 +383,19 @@ export default function Home() {
     }
 
     const result = parseReminder(text)
-    console.log('Parse result:', result)
 
     if (result.date) {
       const { recurrence } = result
-      console.log('Recurrence detected:', recurrence)
 
-      // For birthdays/anniversaries, auto-create as yearly recurring (no end date prompt)
       if (recurrence.isBirthday || recurrence.isAnniversary) {
         const recurrenceOptions: RecurrenceOptions = {
           type: 'yearly',
           isBirthday: recurrence.isBirthday,
           isAnniversary: recurrence.isAnniversary,
-          endDate: null  // Forever
+          endDate: null
         }
-        console.log('Creating birthday/anniversary with options:', recurrenceOptions)
         addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
-      // For recurring events with "until" date already specified, create directly
       else if (recurrence.type && recurrence.untilDate) {
         const recurrenceOptions: RecurrenceOptions = {
           type: recurrence.type,
@@ -399,18 +407,15 @@ export default function Home() {
           byMonthDay: recurrence.byMonthDay,
           bySetPos: recurrence.bySetPos
         }
-        console.log('Creating recurring event with until date:', recurrenceOptions)
         addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
-      // For other recurring events, prompt for end date
       else if (recurrence.type && recurrence.needsEndDate) {
         setPendingRecurrence({
-          text: text,  // Store original text for AI title generation
+          text: text,
           date: result.date,
           recurrence
         })
       }
-      // Recurring events that don't need end date prompt (shouldn't happen but handle it)
       else if (recurrence.type) {
         const recurrenceOptions: RecurrenceOptions = {
           type: recurrence.type,
@@ -424,7 +429,6 @@ export default function Home() {
         }
         addReminderWithDate(text, result.date, false, undefined, recurrenceOptions)
       }
-      // Non-recurring events
       else {
         addReminderWithDate(text, result.date)
       }
@@ -453,36 +457,27 @@ export default function Home() {
         byMonthDay: recurrence.byMonthDay,
         bySetPos: recurrence.bySetPos
       }
-      console.log('Creating recurring event with options:', recurrenceOptions)
       addReminderWithDate(text, date, false, undefined, recurrenceOptions)
       setPendingRecurrence(null)
     }
   }
 
   const handleToggle = async (id: string) => {
+    if (!userEmail) return
     const reminder = reminders.find(r => r.id === id)
     if (!reminder) return
 
     const newCompletedState = !reminder.isCompleted
 
-    // Update local state
-    setReminders(prev =>
-      prev.map(r =>
-        r.id === id ? { ...r, isCompleted: newCompletedState } : r
-      )
-    )
+    // Update Firestore (onSnapshot will update local state)
+    await updateReminderDB(userEmail, id, { isCompleted: newCompletedState })
 
-    // If marking as complete and has calendar event, offer to remove from calendar
+    // If marking as complete and has calendar event, remove from calendar
     if (newCompletedState && reminder.calendarEventId && isSignedIn()) {
       try {
         setStatus('Removing from calendar...')
         await deleteCalendarEvent(reminder.calendarEventId)
-        // Clear the calendar event ID since it's deleted
-        setReminders(prev =>
-          prev.map(r =>
-            r.id === id ? { ...r, calendarEventId: undefined } : r
-          )
-        )
+        await updateReminderDB(userEmail, id, { calendarEventId: null })
         setStatus('Completed and removed from calendar')
         setTimeout(() => setStatus(null), 2000)
       } catch {
@@ -493,6 +488,7 @@ export default function Home() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!userEmail) return
     const reminder = reminders.find(r => r.id === id)
     if (reminder?.calendarEventId && isSignedIn()) {
       try {
@@ -500,10 +496,10 @@ export default function Home() {
         setStatus('Removed from calendar')
         setTimeout(() => setStatus(null), 2000)
       } catch {
-        // Still delete locally even if calendar delete fails
+        // Still delete from Firestore even if calendar delete fails
       }
     }
-    setReminders(prev => prev.filter(r => r.id !== id))
+    await deleteReminderDB(userEmail, id)
   }
 
   return (
@@ -621,6 +617,7 @@ export default function Home() {
           detectedName={pendingNameConfirmation.detectedName}
           onConfirm={handleConfirmPerson}
           onDeny={handleDenyPerson}
+          isLoading={isCreatingProfile}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import PersonAvatar from '@/components/PersonAvatar'
 import CareActionsPanel from '@/components/CareActionsPanel'
@@ -8,9 +8,17 @@ import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
 import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
-import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
-import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
+import { isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
+import {
+  getPersonByIdDB,
+  updatePersonDoc,
+  deletePersonDoc,
+  subscribeReminders,
+  addReminder as addReminderDB,
+  updateReminder as updateReminderDB,
+  deleteReminder as deleteReminderDB,
+} from '@/lib/db'
 
 function getCardColor(index: number): string {
   const colors = ['bg-blush/60', 'bg-lavender/60', 'bg-mint/60', 'bg-peach/60', 'bg-sky/60']
@@ -29,7 +37,7 @@ export default function PersonProfilePage() {
   }, [])
 
   const [person, setPerson] = useState<Person | null>(null)
-  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [allReminders, setAllReminders] = useState<Reminder[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [status, setStatus] = useState<string | null>(null)
@@ -45,42 +53,47 @@ export default function PersonProfilePage() {
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
-  const loadReminders = useCallback(() => {
-    try {
-      const key = getRemindersKey()
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          return parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) }))
-        }
-      }
-    } catch {}
-    return []
-  }, [])
+  const unsubReminders = useRef<(() => void) | null>(null)
 
-  const saveReminders = useCallback((newReminders: Reminder[]) => {
-    const key = getRemindersKey()
-    localStorage.setItem(key, JSON.stringify(newReminders))
-  }, [])
-
+  // Load person from Firestore + subscribe to reminders
   useEffect(() => {
-    const email = getStoredEmail()
-    const loadedPerson = getPersonById(personId, email || undefined)
-    if (loadedPerson) {
-      setPerson(loadedPerson)
-      setEditingEmail(loadedPerson.email || '')
-      const allReminders = loadReminders()
-      const linkedReminders = allReminders.filter((r: Reminder) =>
-        loadedPerson.linkedReminderIds.includes(r.id) ||
-        r.text.toLowerCase().includes(loadedPerson.name.toLowerCase())
-      )
-      setReminders(linkedReminders)
-    } else {
-      setError('Person not found')
+    if (!userEmail) return
+
+    let cancelled = false
+
+    async function load() {
+      const loadedPerson = await getPersonByIdDB(userEmail!, personId)
+      if (cancelled) return
+
+      if (loadedPerson) {
+        setPerson(loadedPerson)
+        setEditingEmail(loadedPerson.email || '')
+      } else {
+        setError('Person not found')
+      }
+      setIsLoading(false)
     }
-    setIsLoading(false)
-  }, [personId, loadReminders])
+
+    load()
+
+    // Subscribe to all reminders for this user (we filter client-side)
+    unsubReminders.current = subscribeReminders(userEmail, (reminders) => {
+      setAllReminders(reminders)
+    })
+
+    return () => {
+      cancelled = true
+      if (unsubReminders.current) unsubReminders.current()
+    }
+  }, [userEmail, personId])
+
+  // Filter reminders linked to this person
+  const reminders = person
+    ? allReminders.filter((r) =>
+        person.linkedReminderIds.includes(r.id) ||
+        r.text.toLowerCase().includes(person.name.toLowerCase())
+      )
+    : []
 
   const handleSelectTemplate = (template: CareTemplate, generatedText: string) => {
     setTemplateModal({ template, generatedText })
@@ -90,9 +103,9 @@ export default function PersonProfilePage() {
     setShowEditRelationship(true)
   }
 
-  const handleUpdateRelationship = (relationshipType: RelationshipType, birthday?: string) => {
-    if (person) {
-      updatePerson(person.id, { relationshipType, birthday }, userEmail || undefined)
+  const handleUpdateRelationship = async (relationshipType: RelationshipType, birthday?: string) => {
+    if (person && userEmail) {
+      await updatePersonDoc(userEmail, person.id, { relationshipType, birthday: birthday ?? null })
       setPerson({ ...person, relationshipType, birthday })
       setShowEditRelationship(false)
       setStatus('Profile updated')
@@ -100,25 +113,26 @@ export default function PersonProfilePage() {
     }
   }
 
-  const handleSaveEmail = () => {
-    if (person) {
-      const emailToSave = editingEmail.trim() || undefined
-      updatePerson(person.id, { email: emailToSave }, userEmail || undefined)
-      setPerson({ ...person, email: emailToSave })
+  const handleSaveEmail = async () => {
+    if (person && userEmail) {
+      const emailToSave = editingEmail.trim() || null
+      await updatePersonDoc(userEmail, person.id, { email: emailToSave })
+      setPerson({ ...person, email: emailToSave || undefined })
       setShowEditEmail(false)
       setStatus('Email updated')
       setTimeout(() => setStatus(null), 2000)
     }
   }
 
-  const handleDeleteProfile = () => {
-    if (person) {
-      deletePerson(person.id, userEmail || undefined)
+  const handleDeleteProfile = async () => {
+    if (person && userEmail) {
+      await deletePersonDoc(userEmail, person.id)
       router.push('/')
     }
   }
 
   const handleDeleteReminder = async (id: string) => {
+    if (!userEmail) return
     const reminder = reminders.find(r => r.id === id)
 
     if (reminder?.calendarEventId && isSignedIn()) {
@@ -133,10 +147,7 @@ export default function PersonProfilePage() {
       }
     }
 
-    const allReminders = loadReminders()
-    const updatedReminders = allReminders.filter((r: Reminder) => r.id !== id)
-    saveReminders(updatedReminders)
-    setReminders(prev => prev.filter(r => r.id !== id))
+    await deleteReminderDB(userEmail, id)
   }
 
   const handleConfirmTemplate = async (data: {
@@ -148,7 +159,7 @@ export default function PersonProfilePage() {
     recurrenceInterval: number
     addMeetLink?: boolean
   }) => {
-    if (!person) return
+    if (!person || !userEmail) return
 
     try {
       const dateTime = new Date(`${data.date}T${data.time}`)
@@ -163,12 +174,16 @@ export default function PersonProfilePage() {
         isRecurring: data.isRecurring
       }
 
-      const allReminders = loadReminders()
-      const updatedReminders = [newReminder, ...allReminders]
-      saveReminders(updatedReminders)
+      // Write to Firestore
+      await addReminderDB(userEmail, newReminder)
 
-      linkReminderToPerson(person.id, id, userEmail || undefined)
-      setReminders(prev => [newReminder, ...prev])
+      // Link reminder to person
+      const updatedIds = [...person.linkedReminderIds]
+      if (!updatedIds.includes(id)) {
+        updatedIds.push(id)
+        await updatePersonDoc(userEmail, person.id, { linkedReminderIds: updatedIds })
+        setPerson({ ...person, linkedReminderIds: updatedIds })
+      }
 
       if (isSignedIn()) {
         const recurrenceOptions: RecurrenceOptions | undefined = data.isRecurring && data.recurrenceType ? {
@@ -189,13 +204,7 @@ export default function PersonProfilePage() {
         })
 
         if (result?.id) {
-          const updated = updatedReminders.map(r =>
-            r.id === id ? { ...r, calendarEventId: result.id } : r
-          )
-          saveReminders(updated)
-          setReminders(prev => prev.map(r =>
-            r.id === id ? { ...r, calendarEventId: result.id } : r
-          ))
+          await updateReminderDB(userEmail, id, { calendarEventId: result.id })
         }
 
         const statusMsg = data.addMeetLink
@@ -204,7 +213,7 @@ export default function PersonProfilePage() {
         setStatus(statusMsg)
         setTimeout(() => setStatus(null), 3000)
       } else {
-        setStatus('Saved locally')
+        setStatus('Saved')
         setTimeout(() => setStatus(null), 2000)
       }
 
@@ -263,7 +272,6 @@ export default function PersonProfilePage() {
   }
 
   const now = new Date()
-  // History is purely date-based - no isCompleted check
   const upcomingReminders = reminders
     .filter(r => r.date >= now)
     .sort((a, b) => a.date.getTime() - b.date.getTime())

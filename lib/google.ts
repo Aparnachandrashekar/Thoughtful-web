@@ -38,6 +38,10 @@ export function initGoogleAuth(clientId: string) {
     client_id: clientId,
     scope: SCOPES,
     callback: async (resp: any) => {
+      if (resp.error) {
+        console.error('OAuth error:', resp.error)
+        return
+      }
       if (resp.access_token) {
         accessToken = resp.access_token
         // Token expires in ~1 hour, save with 50 min buffer
@@ -118,12 +122,6 @@ export function getStoredEmail(): string | null {
   return localStorage.getItem(USER_EMAIL_KEY)
 }
 
-export function getRemindersKey(): string {
-  // First try the in-memory userEmail, then fall back to localStorage
-  const email = userEmail || getStoredEmail()
-  return email ? `thoughtful-reminders-${email}` : 'thoughtful-reminders'
-}
-
 export interface RecurrenceOptions {
   type: 'yearly' | 'monthly' | 'weekly' | 'daily' | null
   isBirthday: boolean
@@ -190,11 +188,12 @@ export async function createCalendarEvent(event: {
 }) {
   // Ensure we have a valid token
   if (!isSignedIn()) {
-    console.error('createCalendarEvent: Not signed in, accessToken:', !!accessToken)
     throw new Error('Not signed in')
   }
 
-  console.log('createCalendarEvent: Using token:', accessToken?.substring(0, 20) + '...')
+  if (!accessToken) {
+    throw new Error('Access token unavailable after sign-in check')
+  }
 
   // Get user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -245,8 +244,6 @@ export async function createCalendarEvent(event: {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
-  console.log('Creating calendar event:', JSON.stringify(eventBody, null, 2))
-
   // Use conferenceDataVersion=1 if adding Meet link
   const url = event.addMeetLink
     ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
@@ -274,7 +271,8 @@ export async function updateCalendarEvent(eventId: string, event: {
   title: string
   date: string
 }) {
-  if (!accessToken) throw new Error('Not signed in')
+  if (!isSignedIn()) throw new Error('Not signed in')
+  if (!accessToken) throw new Error('Access token unavailable after sign-in check')
 
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
@@ -301,6 +299,7 @@ export async function updateCalendarEvent(eventId: string, event: {
 }
 
 export async function deleteCalendarEvent(eventId: string) {
+  if (!isSignedIn()) return
   if (!accessToken) return
 
   await fetch(

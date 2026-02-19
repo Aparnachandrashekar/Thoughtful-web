@@ -6,12 +6,14 @@ interface PersonConfirmationModalProps {
   detectedName: DetectedName
   onConfirm: () => void
   onDeny: () => void
+  isLoading?: boolean
 }
 
 export default function PersonConfirmationModal({
   detectedName,
   onConfirm,
-  onDeny
+  onDeny,
+  isLoading = false
 }: PersonConfirmationModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -56,15 +58,17 @@ export default function PersonConfirmationModal({
           <div className="flex space-x-3 pt-2">
             <button
               onClick={onDeny}
-              className="flex-1 py-2.5 px-4 border-2 border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 font-medium text-sm transition-all"
+              disabled={isLoading}
+              className="flex-1 py-2.5 px-4 border-2 border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 font-medium text-sm transition-all disabled:opacity-50"
             >
               No
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 py-2.5 px-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-md"
+              disabled={isLoading}
+              className="flex-1 py-2.5 px-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-md disabled:opacity-50"
             >
-              Yes, create profile
+              {isLoading ? 'Creating...' : 'Yes, create profile'}
             </button>
           </div>
         </div>

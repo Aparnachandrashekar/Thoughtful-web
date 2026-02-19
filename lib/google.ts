@@ -38,10 +38,6 @@ export function initGoogleAuth(clientId: string) {
     client_id: clientId,
     scope: SCOPES,
     callback: async (resp: any) => {
-      if (resp.error) {
-        console.error('OAuth error:', resp.error)
-        return
-      }
       if (resp.access_token) {
         accessToken = resp.access_token
         // Token expires in ~1 hour, save with 50 min buffer
@@ -90,8 +86,10 @@ export function signOut() {
 }
 
 export function isSignedIn(): boolean {
+  // Check in-memory token first, then localStorage
   if (accessToken) return true
 
+  // Try to restore from localStorage if not in memory
   if (typeof window !== 'undefined') {
     const savedToken = localStorage.getItem(TOKEN_KEY)
     const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
@@ -99,6 +97,7 @@ export function isSignedIn(): boolean {
     if (savedToken && savedExpiry) {
       const expiryTime = parseInt(savedExpiry, 10)
       if (Date.now() < expiryTime) {
+        // Restore token to memory
         accessToken = savedToken
         userEmail = localStorage.getItem(USER_EMAIL_KEY)
         return true
@@ -119,25 +118,10 @@ export function getStoredEmail(): string | null {
   return localStorage.getItem(USER_EMAIL_KEY)
 }
 
-// Get the current access token, restoring from localStorage if needed.
-// Returns null if no valid token is available.
-function getAccessToken(): string | null {
-  if (accessToken) return accessToken
-
-  if (typeof window !== 'undefined') {
-    const savedToken = localStorage.getItem(TOKEN_KEY)
-    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
-    if (savedToken && savedExpiry) {
-      const expiryTime = parseInt(savedExpiry, 10)
-      if (Date.now() < expiryTime) {
-        accessToken = savedToken
-        userEmail = localStorage.getItem(USER_EMAIL_KEY)
-        return savedToken
-      }
-    }
-  }
-
-  return null
+export function getRemindersKey(): string {
+  // First try the in-memory userEmail, then fall back to localStorage
+  const email = userEmail || getStoredEmail()
+  return email ? `thoughtful-reminders-${email}` : 'thoughtful-reminders'
 }
 
 export interface RecurrenceOptions {
@@ -181,7 +165,10 @@ function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   }
 
   // Add BYSETPOS if specified (e.g., -1 for last occurrence)
+  // Note: BYSETPOS requires BYDAY to be set for "last Saturday of month" pattern
   if (options.bySetPos && options.byDay) {
+    // For BYSETPOS, we need to restructure: BYDAY=SA;BYSETPOS=-1 doesn't work
+    // Instead use: BYDAY=-1SA (last Saturday)
     rule = rule.replace(`;BYDAY=${options.byDay}`, `;BYDAY=${options.bySetPos}${options.byDay}`)
   }
 
@@ -201,10 +188,13 @@ export async function createCalendarEvent(event: {
   addMeetLink?: boolean
   attendeeEmail?: string
 }) {
-  const token = getAccessToken()
-  if (!token) {
-    throw new Error('Session expired — please sign out and sign back in')
+  // Ensure we have a valid token
+  if (!isSignedIn()) {
+    console.error('createCalendarEvent: Not signed in, accessToken:', !!accessToken)
+    throw new Error('Not signed in')
   }
+
+  console.log('createCalendarEvent: Using token:', accessToken?.substring(0, 20) + '...')
 
   // Get user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -255,39 +245,26 @@ export async function createCalendarEvent(event: {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
+  console.log('Creating calendar event:', JSON.stringify(eventBody, null, 2))
+
   // Use conferenceDataVersion=1 if adding Meet link
   const url = event.addMeetLink
     ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
     : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
-
-  let res: Response
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(eventBody),
-      signal: controller.signal,
-    })
-  } catch (e: any) {
-    clearTimeout(timeout)
-    if (e.name === 'AbortError') {
-      throw new Error('Calendar request timed out (15s)')
-    }
-    throw new Error(`Calendar network error: ${e.message}`)
-  }
-  clearTimeout(timeout)
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(eventBody),
+  })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    const msg = err.error?.message || `Calendar API error (${res.status})`
-    console.error('Calendar API error:', res.status, err)
-    throw new Error(msg)
+    console.error('Calendar API error:', err)
+    throw new Error(err.error?.message || 'Failed to create event')
   }
 
   return res.json()
@@ -297,63 +274,40 @@ export async function updateCalendarEvent(eventId: string, event: {
   title: string
   date: string
 }) {
-  const token = getAccessToken()
-  if (!token) throw new Error('No access token — try signing out and back in')
+  if (!accessToken) throw new Error('Not signed in')
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
-
-  let res: Response
-  try {
-    res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          summary: event.title,
-          start: { dateTime: event.date },
-          end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
-        }),
-        signal: controller.signal,
-      }
-    )
-  } catch (e: any) {
-    clearTimeout(timeout)
-    if (e.name === 'AbortError') throw new Error('Calendar update timed out')
-    throw new Error(`Calendar network error: ${e.message}`)
-  }
-  clearTimeout(timeout)
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        summary: event.title,
+        start: { dateTime: event.date },
+        end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
+      }),
+    }
+  )
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Calendar update failed (${res.status})`)
+    throw new Error(err.error?.message || 'Failed to update event')
   }
 
   return res.json()
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  const token = getAccessToken()
-  if (!token) return
+  if (!accessToken) return
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10000)
-
-  try {
-    await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      }
-    )
-  } catch {
-    // Silently fail — deletion is best-effort
-  }
-  clearTimeout(timeout)
+  await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  )
 }

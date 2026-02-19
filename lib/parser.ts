@@ -145,7 +145,7 @@ function getNextMonthDay(dayOfMonth: number): Date {
 function parseUntilDate(text: string): Date | undefined {
   const untilMatch = text.match(/until\s+(.+?)(?:\s*$|,|\.|;)/i)
   if (untilMatch) {
-    const parsed = chrono.parse(untilMatch[1])
+    const parsed = chrono.parse(untilMatch[1], { instant: new Date() }, { forwardDate: true })
     if (parsed.length > 0) {
       return parsed[0].start.date()
     }
@@ -203,6 +203,40 @@ function detectRecurrence(text: string): RecurrenceInfo {
       byDay: DAY_MAP[dayName],
       untilDate,
       calculatedDate: getNextWeekday(dayNum)
+    }
+  }
+
+  // Check for "every other day" / "every other day of the week" (daily with interval 2)
+  if (/\bevery\s+other\s+day(\s+of\s+the\s+week)?\b/i.test(lowerText)) {
+    const dayAfterTomorrow = new Date()
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
+    dayAfterTomorrow.setHours(8, 0, 0, 0)
+    return {
+      type: 'daily',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      interval: 2,
+      untilDate,
+      calculatedDate: dayAfterTomorrow
+    }
+  }
+
+  // Check for "every X days" (daily with interval X)
+  const everyXDaysMatch = lowerText.match(/every\s+(\d+)\s+days?\b/i)
+  if (everyXDaysMatch) {
+    const interval = parseInt(everyXDaysMatch[1], 10)
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() + interval)
+    startDate.setHours(8, 0, 0, 0)
+    return {
+      type: 'daily',
+      isBirthday: false,
+      isAnniversary: false,
+      needsEndDate: !untilDate,
+      interval,
+      untilDate,
+      calculatedDate: startDate
     }
   }
 
@@ -288,6 +322,9 @@ function cleanRecurrenceFromTitle(title: string): string {
     .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
     // Alternating patterns
     .replace(/\b(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
+    // Every other day / every X days (with optional "of the week")
+    .replace(/\bevery\s+other\s+day(\s+of\s+the\s+week)?\b/gi, '')
+    .replace(/\bevery\s+\d+\s+days?\b/gi, '')
     // Day X of month patterns
     .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')
     .replace(/\b\d{1,2}(?:st|nd|rd|th)?\s+of\s+every\s+month\b/gi, '')
@@ -382,6 +419,18 @@ function fixAmbiguousHour(date: Date, hasExplicitMeridiem: boolean): { date: Dat
 function extractTitle(text: string): string {
   let title = text
 
+  // Clean recurrence patterns FIRST (before day names get stripped)
+  title = cleanRecurrenceFromTitle(title)
+
+  // Remove "starting [date/time]" patterns
+  title = title
+    .replace(/\bstarting\s+(from\s+)?\w+\s+at\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, '')
+    .replace(/\bstarting\s+(from\s+)?(today|tonight|tomorrow|yesterday)\b/gi, '')
+    .replace(/\bstarting\s+(from\s+)?(this|next|last)\s+\w+/gi, '')
+    .replace(/\bstarting\s+(from\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, '')
+    .replace(/\bstarting\s+(from\s+)?at\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, '')
+    .replace(/\bstarting\b/gi, '')
+
   // Remove common date/time phrases
   title = title
     // Time patterns
@@ -401,9 +450,6 @@ function extractTitle(text: string): string {
     // Filler words anywhere
     .replace(/\b(is on|is at|is|are)\b/gi, '')
 
-  // Clean recurrence patterns from title
-  title = cleanRecurrenceFromTitle(title)
-
   // Clean up
   title = title
     .replace(/^[\s,.\-:]+/, '')  // Remove leading punctuation
@@ -419,12 +465,56 @@ function extractTitle(text: string): string {
   return title
 }
 
+// Try to parse a date from text using chrono, with preprocessing
+function tryChronoParse(text: string): { date: Date; hasTime: boolean } | null {
+  let processedText = preprocessText(text)
+  // Strip recurrence patterns so chrono focuses on the actual date/time
+  processedText = cleanRecurrenceFromTitle(processedText)
+  // Help chrono understand "starting [date]" → "on [date]"
+  processedText = processedText.replace(/\bstarting\s+(from\s+)?/gi, 'on ')
+  processedText = preprocessTimeFormats(processedText)
+
+  // Use forwardDate to prefer future dates (e.g., "tuesday" = next tuesday, not last)
+  const parsed = chrono.parse(processedText, { instant: new Date() }, { forwardDate: true })
+  if (parsed.length === 0) return null
+
+  const result = parsed[0]
+  const hasTime = result.start.isCertain('hour')
+  const hasExplicitMeridiem = result.start.isCertain('meridiem')
+
+  let date = result.start.date()
+
+  if (!hasTime) {
+    date.setHours(8, 0, 0, 0)
+  } else {
+    const fixed = fixAmbiguousHour(date, hasExplicitMeridiem)
+    date = fixed.date
+  }
+
+  return { date, hasTime }
+}
+
 export function parseReminder(text: string): ParseResult {
   // Detect recurrence first - this may calculate the date for us
   const recurrence = detectRecurrence(text)
 
-  // If recurrence detection calculated a date, use that
+  // Always try chrono to parse explicit dates/times from the text
+  // This handles cases like "every other day starting tuesday at 8pm"
+  // where recurrence detects the pattern but the user also specified a start date
+  const chronoResult = tryChronoParse(text)
+
   if (recurrence.calculatedDate) {
+    // Recurrence calculated a default start date, but if the user
+    // also specified an explicit date, prefer that
+    if (chronoResult) {
+      const title = extractTitle(text)
+      return {
+        title: title || text,
+        date: chronoResult.date,
+        recurrence,
+      }
+    }
+    // No explicit date — use the recurrence's calculated date
     const title = extractTitle(text)
     return {
       title: title || text,
@@ -434,7 +524,7 @@ export function parseReminder(text: string): ParseResult {
   }
 
   // Check for explicit day of month pattern like "on 20", "the 15th"
-  // This takes priority because chrono often misinterprets these
+  // This takes priority over chrono because chrono often misinterprets these
   const explicitDay = extractDayOfMonth(text)
   if (explicitDay) {
     const title = extractTitle(text)
@@ -445,41 +535,17 @@ export function parseReminder(text: string): ParseResult {
     }
   }
 
-  // Preprocess to handle negations and fix time formats
-  let processedText = preprocessText(text)
-  processedText = preprocessTimeFormats(processedText)
-
-  const parsed = chrono.parse(processedText)
-
-  if (parsed.length === 0) {
-    // No date found - extract title anyway for the date picker modal
+  // Use chrono result if available
+  if (chronoResult) {
     const title = extractTitle(text)
-    return { title: title || text, date: null, recurrence }
+    return {
+      title: title || text,
+      date: chronoResult.date,
+      recurrence,
+    }
   }
 
-  const result = parsed[0]
-
-  // Check if time was explicitly specified
-  const hasTime = result.start.isCertain('hour')
-  const hasExplicitMeridiem = result.start.isCertain('meridiem')
-
-  let date = result.start.date()
-
-  if (!hasTime) {
-    // No time specified, default to 8:00 AM
-    date.setHours(8, 0, 0, 0)
-  } else {
-    // Time specified but maybe ambiguous (no AM/PM)
-    const fixed = fixAmbiguousHour(date, hasExplicitMeridiem)
-    date = fixed.date
-  }
-
-  // Extract clean title
+  // No date found - extract title anyway for the date picker modal
   const title = extractTitle(text)
-
-  return {
-    title: title || text,
-    date,
-    recurrence,
-  }
+  return { title: title || text, date: null, recurrence }
 }

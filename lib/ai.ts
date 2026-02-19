@@ -1,65 +1,30 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
-
 export async function generateTitle(rawText: string): Promise<string> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY
-
-  // If no API key, fall back to basic extraction
-  if (!apiKey) {
-    return basicTitleExtraction(rawText)
-  }
-
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const response = await fetch('/api/generate-title', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Extract only the event/reminder name from this text. Remove all dates, times, recurrence patterns (like "every Friday", "last Saturday of the month"), and filler words (like "remind me to", "is", "that"). Return ONLY the clean event name, nothing else. Keep it short (2-5 words max).
-
-Examples:
-- "Tomorrow is Mom's birthday" → "Mom's birthday"
-- "Team standup every Friday" → "Team standup"
-- "Last Saturday of the month brunch" → "Brunch"
-- "Remind me to pay rent on the 1st" → "Pay rent"
-- "Call dentist at 3pm tomorrow" → "Call dentist"
-- "Sarah's anniversary on June 20 yearly" → "Sarah's anniversary"
-
-Text: "${rawText}"
-
-Event name:`
-          }]
-        }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 50,
-        }
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: rawText }),
     })
 
     if (!response.ok) {
-      console.error('Gemini API error:', response.status)
       return basicTitleExtraction(rawText)
     }
 
     const data = await response.json()
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+    const title = data.title?.trim()
 
-    if (generatedText && generatedText.length > 0 && generatedText.length < 100) {
-      // Clean up any quotes or extra whitespace
-      return generatedText.replace(/^["']|["']$/g, '').trim()
+    if (title && title.length > 0 && title.length < 100) {
+      return title.replace(/^["']|["']$/g, '').trim()
     }
 
     return basicTitleExtraction(rawText)
   } catch (error) {
-    console.error('Gemini API error:', error)
+    console.error('Title generation API error:', error)
     return basicTitleExtraction(rawText)
   }
 }
 
-// Fallback basic extraction if Gemini fails
+// Fallback basic extraction if API fails
 function basicTitleExtraction(text: string): string {
   let title = text
     // Remove recurrence patterns

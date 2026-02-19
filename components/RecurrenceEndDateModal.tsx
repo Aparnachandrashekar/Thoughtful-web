@@ -16,7 +16,15 @@ export default function RecurrenceEndDateModal({
   onCancel
 }: RecurrenceEndDateModalProps) {
   const [selectedOption, setSelectedOption] = useState<'forever' | 'date'>('forever')
-  const [endDate, setEndDate] = useState('')
+
+  // Default end date to 5 years from now
+  const defaultEndDate = () => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() + 5)
+    return d.toISOString().split('T')[0]
+  }
+
+  const [endDate, setEndDate] = useState(defaultEndDate())
 
   const handleConfirm = () => {
     if (selectedOption === 'forever') {
@@ -35,13 +43,6 @@ export default function RecurrenceEndDateModal({
       case 'daily': return 'daily'
       default: return 'recurring'
     }
-  }
-
-  // Default end date to 5 years from now
-  const defaultEndDate = () => {
-    const d = new Date()
-    d.setFullYear(d.getFullYear() + 5)
-    return d.toISOString().split('T')[0]
   }
 
   return (
@@ -80,7 +81,7 @@ export default function RecurrenceEndDateModal({
           {selectedOption === 'date' && (
             <input
               type="date"
-              value={endDate || defaultEndDate()}
+              value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-lavender focus:outline-none text-gray-700"

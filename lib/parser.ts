@@ -189,8 +189,8 @@ function detectRecurrence(text: string): RecurrenceInfo {
     }
   }
 
-  // Check for "alternating [day]" or "every other [day]" or "every 2 weeks on [day]"
-  const alternatingMatch = lowerText.match(/(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/i)
+  // Check for "alternating [day]" or "every other [day]" or "every alternate [day]" or "every 2 weeks on [day]"
+  const alternatingMatch = lowerText.match(/(alternating|every\s+other|every\s+alternate|alternate|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/i)
   if (alternatingMatch) {
     const dayName = alternatingMatch[2].toLowerCase()
     const dayNum = DAY_TO_NUM[dayName]
@@ -206,8 +206,8 @@ function detectRecurrence(text: string): RecurrenceInfo {
     }
   }
 
-  // Check for "every other day" / "every other day of the week" (daily with interval 2)
-  if (/\bevery\s+other\s+day(\s+of\s+the\s+week)?\b/i.test(lowerText)) {
+  // Check for "every other day" / "every alternate day" / "alternate days" (daily with interval 2)
+  if (/\b(every\s+other\s+day|every\s+alternate\s+day|alternate\s+days?)(\s+of\s+the\s+week)?\b/i.test(lowerText)) {
     const dayAfterTomorrow = new Date()
     dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
     dayAfterTomorrow.setHours(8, 0, 0, 0)
@@ -321,9 +321,9 @@ function cleanRecurrenceFromTitle(title: string): string {
     // Every [day] pattern (with optional 's' at end)
     .replace(/\bevery\s+(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
     // Alternating patterns
-    .replace(/\b(alternating|every\s+other|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
-    // Every other day / every X days (with optional "of the week")
-    .replace(/\bevery\s+other\s+day(\s+of\s+the\s+week)?\b/gi, '')
+    .replace(/\b(alternating|every\s+other|every\s+alternate|alternate|every\s+2\s+weeks?\s+on?)\s*(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)s?\b/gi, '')
+    // Every other day / every alternate day / alternate days (with optional "of the week")
+    .replace(/\b(every\s+other\s+day|every\s+alternate\s+day|alternate\s+days?)(\s+of\s+the\s+week)?\b/gi, '')
     .replace(/\bevery\s+\d+\s+days?\b/gi, '')
     // Day X of month patterns
     .replace(/\bday\s+\d{1,2}\s+of\s+(?:the\s+)?(?:every\s+)?month\b/gi, '')

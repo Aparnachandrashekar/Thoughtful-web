@@ -311,7 +311,8 @@ export default function Home() {
     }
 
     // Sync with Google Calendar if signed in
-    if (isSignedIn()) {
+    const hasToken = isSignedIn()
+    if (hasToken) {
       try {
         if (isUpdate && existingReminder?.calendarEventId) {
           await updateCalendarEvent(existingReminder.calendarEventId, {
@@ -354,12 +355,13 @@ export default function Home() {
         setTimeout(() => setStatus(null), 3000)
       } catch (e: any) {
         console.error('Calendar sync failed:', e)
-        setStatus(`Saved but calendar failed: ${e.message || e}`)
-        setTimeout(() => setStatus(null), 5000)
+        const errMsg = e?.message || String(e) || 'Unknown error'
+        setStatus(`Reminder saved. Calendar error: ${errMsg}`)
+        setTimeout(() => setStatus(null), 8000)
       }
     } else {
-      setStatus('Reminder saved')
-      setTimeout(() => setStatus(null), 3000)
+      setStatus('Reminder saved (no Google token — sign out & back in for calendar sync)')
+      setTimeout(() => setStatus(null), 5000)
     }
   }, [userEmail, people])
 

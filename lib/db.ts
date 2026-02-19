@@ -25,29 +25,31 @@ export async function migrateLocalStorageToFirestore(email: string): Promise<boo
   const migrated = localStorage.getItem(`${MIGRATION_KEY}-${email}`)
   if (migrated) return false
 
-  // Check if Firestore already has data (don't overwrite)
+  let didMigrate = false
+
+  // Collect existing Firestore IDs so we don't overwrite
+  const existingReminderIds = new Set<string>()
+  const existingPeopleIds = new Set<string>()
   try {
-    const existingReminders = await getDocs(query(remindersCol(email)))
-    if (!existingReminders.empty) {
-      // Firestore already has data, mark as migrated
-      localStorage.setItem(`${MIGRATION_KEY}-${email}`, 'true')
-      return false
-    }
+    const remSnap = await getDocs(query(remindersCol(email)))
+    remSnap.docs.forEach(d => existingReminderIds.add(d.id))
+    const pplSnap = await getDocs(query(peopleCol(email)))
+    pplSnap.docs.forEach(d => existingPeopleIds.add(d.id))
   } catch (e) {
-    console.error('Migration: could not check Firestore, skipping:', e)
+    console.error('Migration: could not read Firestore, skipping:', e)
     return false
   }
 
-  let didMigrate = false
-
-  // Migrate reminders
+  // Migrate reminders (merge — only add items not already in Firestore)
   const remindersKey = `thoughtful-reminders-${email}`
   const savedReminders = localStorage.getItem(remindersKey)
   if (savedReminders) {
     try {
       const parsed = JSON.parse(savedReminders)
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
+        let count = 0
         for (const r of parsed) {
+          if (existingReminderIds.has(r.id)) continue
           const ref = doc(remindersCol(email), r.id)
           await setDoc(ref, {
             text: r.text,
@@ -58,23 +60,28 @@ export async function migrateLocalStorageToFirestore(email: string): Promise<boo
             isBirthday: r.isBirthday ?? false,
             isAnniversary: r.isAnniversary ?? false,
           })
+          count++
         }
-        didMigrate = true
-        console.log(`Migrated ${parsed.length} reminders to Firestore`)
+        if (count > 0) {
+          didMigrate = true
+          console.log(`Migrated ${count} reminders to Firestore`)
+        }
       }
     } catch (e) {
       console.error('Failed to migrate reminders:', e)
     }
   }
 
-  // Migrate people
+  // Migrate people (merge)
   const peopleKey = `thoughtful-people-${email}`
   const savedPeople = localStorage.getItem(peopleKey)
   if (savedPeople) {
     try {
       const parsed = JSON.parse(savedPeople)
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
+        let count = 0
         for (const p of parsed) {
+          if (existingPeopleIds.has(p.id)) continue
           const ref = doc(peopleCol(email), p.id)
           await setDoc(ref, {
             name: p.name,
@@ -85,9 +92,12 @@ export async function migrateLocalStorageToFirestore(email: string): Promise<boo
             birthday: p.birthday ?? null,
             email: p.email ?? null,
           })
+          count++
         }
-        didMigrate = true
-        console.log(`Migrated ${parsed.length} people to Firestore`)
+        if (count > 0) {
+          didMigrate = true
+          console.log(`Migrated ${count} people to Firestore`)
+        }
       }
     } catch (e) {
       console.error('Failed to migrate people:', e)

@@ -335,10 +335,10 @@ export default function Home() {
           setStatus(successMsg)
         }
         setTimeout(() => setStatus(null), 3000)
-      } catch (e) {
+      } catch (e: any) {
         console.error('Calendar sync failed:', e)
-        setStatus('Saved (calendar sync failed)')
-        setTimeout(() => setStatus(null), 3000)
+        setStatus(`Saved but calendar failed: ${e.message || e}`)
+        setTimeout(() => setStatus(null), 5000)
       }
     } else {
       setStatus('Saved. Sign in to Google for calendar reminders.')

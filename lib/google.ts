@@ -90,10 +90,8 @@ export function signOut() {
 }
 
 export function isSignedIn(): boolean {
-  // Check in-memory token first, then localStorage
   if (accessToken) return true
 
-  // Try to restore from localStorage if not in memory
   if (typeof window !== 'undefined') {
     const savedToken = localStorage.getItem(TOKEN_KEY)
     const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
@@ -101,7 +99,6 @@ export function isSignedIn(): boolean {
     if (savedToken && savedExpiry) {
       const expiryTime = parseInt(savedExpiry, 10)
       if (Date.now() < expiryTime) {
-        // Restore token to memory
         accessToken = savedToken
         userEmail = localStorage.getItem(USER_EMAIL_KEY)
         return true
@@ -120,6 +117,27 @@ export function getUserEmail() {
 export function getStoredEmail(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem(USER_EMAIL_KEY)
+}
+
+// Get the current access token, restoring from localStorage if needed.
+// Returns null if no valid token is available.
+function getAccessToken(): string | null {
+  if (accessToken) return accessToken
+
+  if (typeof window !== 'undefined') {
+    const savedToken = localStorage.getItem(TOKEN_KEY)
+    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+    if (savedToken && savedExpiry) {
+      const expiryTime = parseInt(savedExpiry, 10)
+      if (Date.now() < expiryTime) {
+        accessToken = savedToken
+        userEmail = localStorage.getItem(USER_EMAIL_KEY)
+        return savedToken
+      }
+    }
+  }
+
+  return null
 }
 
 export interface RecurrenceOptions {
@@ -163,10 +181,7 @@ function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   }
 
   // Add BYSETPOS if specified (e.g., -1 for last occurrence)
-  // Note: BYSETPOS requires BYDAY to be set for "last Saturday of month" pattern
   if (options.bySetPos && options.byDay) {
-    // For BYSETPOS, we need to restructure: BYDAY=SA;BYSETPOS=-1 doesn't work
-    // Instead use: BYDAY=-1SA (last Saturday)
     rule = rule.replace(`;BYDAY=${options.byDay}`, `;BYDAY=${options.bySetPos}${options.byDay}`)
   }
 
@@ -179,104 +194,6 @@ function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   return [rule]
 }
 
-// Request a fresh token from Google (returns a promise that resolves when token is ready)
-function refreshAccessToken(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!tokenClient) {
-      reject(new Error('Token client not initialized'))
-      return
-    }
-
-    // Save the existing callback and temporarily override it
-    const originalCallback = onSignIn
-    const timeoutId = setTimeout(() => {
-      onSignIn = originalCallback
-      reject(new Error('Token refresh timed out'))
-    }, 30000)
-
-    tokenClient.callback = async (resp: any) => {
-      clearTimeout(timeoutId)
-      if (resp.error) {
-        onSignIn = originalCallback
-        reject(new Error(`OAuth error: ${resp.error}`))
-        return
-      }
-      if (resp.access_token) {
-        accessToken = resp.access_token
-        const expiryTime = Date.now() + 50 * 60 * 1000
-        localStorage.setItem(TOKEN_KEY, resp.access_token)
-        localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
-
-        const email = await fetchUserEmail(resp.access_token)
-        if (email) {
-          userEmail = email
-          localStorage.setItem(USER_EMAIL_KEY, email)
-        }
-
-        // Restore original callback and notify
-        onSignIn = originalCallback
-        if (onSignIn) onSignIn(email || '')
-        resolve(resp.access_token)
-      }
-    }
-
-    tokenClient.requestAccessToken({ prompt: '' })
-  })
-}
-
-// Ensure we have a valid access token, refreshing if needed
-async function ensureAccessToken(): Promise<string> {
-  // First try in-memory
-  if (accessToken) {
-    // Check if localStorage says it's still valid
-    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
-    if (savedExpiry) {
-      const expiryTime = parseInt(savedExpiry, 10)
-      if (Date.now() < expiryTime) {
-        return accessToken
-      }
-    }
-  }
-
-  // Try restoring from localStorage
-  const savedToken = localStorage.getItem(TOKEN_KEY)
-  const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
-  if (savedToken && savedExpiry) {
-    const expiryTime = parseInt(savedExpiry, 10)
-    if (Date.now() < expiryTime) {
-      accessToken = savedToken
-      userEmail = localStorage.getItem(USER_EMAIL_KEY)
-      return savedToken
-    }
-  }
-
-  // Token expired or missing — refresh silently
-  return refreshAccessToken()
-}
-
-// Make a Calendar API call, retrying once with a fresh token on 401
-async function calendarFetch(url: string, options: RequestInit): Promise<Response> {
-  const token = await ensureAccessToken()
-  const headers = {
-    ...options.headers as Record<string, string>,
-    Authorization: `Bearer ${token}`,
-  }
-
-  const res = await fetch(url, { ...options, headers })
-
-  if (res.status === 401) {
-    // Token was rejected — force refresh and retry once
-    const newToken = await refreshAccessToken()
-    const retryHeaders = {
-      ...options.headers as Record<string, string>,
-      Authorization: `Bearer ${newToken}`,
-    }
-    return fetch(url, { ...options, headers: retryHeaders })
-  }
-
-  return res
-}
-
 export async function createCalendarEvent(event: {
   title: string
   date: string
@@ -284,6 +201,11 @@ export async function createCalendarEvent(event: {
   addMeetLink?: boolean
   attendeeEmail?: string
 }) {
+  const token = getAccessToken()
+  if (!token) {
+    throw new Error('Session expired — please sign out and sign back in')
+  }
+
   // Get user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
@@ -338,16 +260,27 @@ export async function createCalendarEvent(event: {
     ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
     : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 
-  const res = await calendarFetch(url, {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(eventBody),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    console.error('Calendar API error:', err)
-    throw new Error(err.error?.message || 'Failed to create event')
+    const msg = err.error?.message || `Calendar API ${res.status}`
+    console.error('Calendar API error:', res.status, err)
+    if (res.status === 401) {
+      // Clear stale token so isSignedIn() won't return true with a bad token
+      accessToken = null
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(TOKEN_EXPIRY_KEY)
+      throw new Error('Session expired — please sign out and sign back in')
+    }
+    throw new Error(msg)
   }
 
   return res.json()
@@ -357,11 +290,17 @@ export async function updateCalendarEvent(eventId: string, event: {
   title: string
   date: string
 }) {
-  const res = await calendarFetch(
+  const token = getAccessToken()
+  if (!token) throw new Error('Session expired — please sign out and sign back in')
+
+  const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         summary: event.title,
         start: { dateTime: event.date },
@@ -372,6 +311,12 @@ export async function updateCalendarEvent(eventId: string, event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
+    if (res.status === 401) {
+      accessToken = null
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(TOKEN_EXPIRY_KEY)
+      throw new Error('Session expired — please sign out and sign back in')
+    }
     throw new Error(err.error?.message || 'Failed to update event')
   }
 
@@ -379,8 +324,20 @@ export async function updateCalendarEvent(eventId: string, event: {
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  await calendarFetch(
+  const token = getAccessToken()
+  if (!token) return
+
+  const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    { method: 'DELETE' }
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
   )
+
+  if (res.status === 401) {
+    accessToken = null
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  }
 }

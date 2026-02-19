@@ -260,14 +260,28 @@ export async function createCalendarEvent(event: {
     ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
     : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(eventBody),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventBody),
+      signal: controller.signal,
+    })
+  } catch (e: any) {
+    clearTimeout(timeout)
+    if (e.name === 'AbortError') {
+      throw new Error('Calendar request timed out (15s)')
+    }
+    throw new Error(`Calendar network error: ${e.message}`)
+  }
+  clearTimeout(timeout)
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -286,21 +300,33 @@ export async function updateCalendarEvent(eventId: string, event: {
   const token = getAccessToken()
   if (!token) throw new Error('No access token — try signing out and back in')
 
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        summary: event.title,
-        start: { dateTime: event.date },
-        end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
-      }),
-    }
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+
+  let res: Response
+  try {
+    res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          summary: event.title,
+          start: { dateTime: event.date },
+          end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
+        }),
+        signal: controller.signal,
+      }
+    )
+  } catch (e: any) {
+    clearTimeout(timeout)
+    if (e.name === 'AbortError') throw new Error('Calendar update timed out')
+    throw new Error(`Calendar network error: ${e.message}`)
+  }
+  clearTimeout(timeout)
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -314,11 +340,20 @@ export async function deleteCalendarEvent(eventId: string) {
   const token = getAccessToken()
   if (!token) return
 
-  await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    }
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+
+  try {
+    await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      }
+    )
+  } catch {
+    // Silently fail — deletion is best-effort
+  }
+  clearTimeout(timeout)
 }

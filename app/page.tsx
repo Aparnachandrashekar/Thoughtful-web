@@ -222,6 +222,24 @@ export default function Home() {
   ) => {
     const id = existingReminder?.id || Date.now().toString()
 
+    // Detect names IMMEDIATELY (before any async work) so the modal shows right away
+    if (!isUpdate) {
+      const detectedName = getPrimaryDetectedName(rawText)
+      if (detectedName) {
+        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
+        if (existingPerson) {
+          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
+          refreshPeople()
+        } else {
+          setPendingNameConfirmation({
+            detectedName,
+            reminderId: id,
+            originalText: rawText
+          })
+        }
+      }
+    }
+
     // For updates, keep the existing title unless user explicitly changed it
     // For new reminders, generate a friendly title
     let friendlyTitle: string
@@ -234,7 +252,6 @@ export default function Home() {
         friendlyTitle = await generateTitle(rawText)
       } catch (e) {
         console.error('Title generation failed:', e)
-        // Fallback to raw text if title generation fails
         friendlyTitle = rawText
       }
     }
@@ -254,30 +271,6 @@ export default function Home() {
       setReminders(prev => prev.map(r => r.id === id ? newReminder : r))
     } else {
       setReminders(prev => [newReminder, ...prev])
-    }
-
-    // Detect names for person profile creation BEFORE calendar sync
-    // This ensures profile creation works even if calendar fails
-    if (!isUpdate) {
-      const detectedName = getPrimaryDetectedName(rawText)
-      console.log('Detected name:', detectedName)
-      if (detectedName) {
-        const existingPerson = findPersonByName(detectedName.name, userEmail || undefined)
-        console.log('Existing person:', existingPerson)
-        if (existingPerson) {
-          // Auto-link to existing person
-          linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
-          refreshPeople()
-        } else {
-          // Show confirmation modal for new person
-          console.log('Setting pending name confirmation:', detectedName)
-          setPendingNameConfirmation({
-            detectedName,
-            reminderId: id,
-            originalText: rawText
-          })
-        }
-      }
     }
 
     // Sync with Google Calendar if signed in

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
@@ -98,17 +98,14 @@ export default function Home() {
     setReminders([])
   }, [])
 
-  // Save reminders for current user (localStorage + Firestore background sync)
+  // Track whether reminders have been loaded (prevents saving [] on mount)
+  const remindersLoaded = useRef(false)
+
+  // Save reminders for current user
   const saveReminders = useCallback((newReminders: Reminder[]) => {
     const key = getRemindersKey()
     localStorage.setItem(key, JSON.stringify(newReminders))
-    // Background sync each reminder to Firestore
-    if (userEmail) {
-      for (const r of newReminders) {
-        syncReminderToFirestore(userEmail, r)
-      }
-    }
-  }, [userEmail])
+  }, [])
 
   useEffect(() => {
     setMounted(true)
@@ -139,6 +136,7 @@ export default function Home() {
   useEffect(() => {
     if (mounted) {
       loadReminders()
+      remindersLoaded.current = true
     }
   }, [mounted, userEmail, loadReminders])
 
@@ -181,9 +179,9 @@ export default function Home() {
     setPendingNameConfirmation(null)
   }, [])
 
-  // Persist reminders to localStorage when they change
+  // Persist reminders to localStorage when they change (only after initial load)
   useEffect(() => {
-    if (mounted && reminders.length >= 0) {
+    if (mounted && remindersLoaded.current) {
       saveReminders(reminders)
     }
   }, [reminders, mounted, saveReminders])

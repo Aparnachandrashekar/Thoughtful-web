@@ -26,10 +26,15 @@ export async function migrateLocalStorageToFirestore(email: string): Promise<boo
   if (migrated) return false
 
   // Check if Firestore already has data (don't overwrite)
-  const existingReminders = await getDocs(query(remindersCol(email)))
-  if (!existingReminders.empty) {
-    // Firestore already has data, mark as migrated
-    localStorage.setItem(`${MIGRATION_KEY}-${email}`, 'true')
+  try {
+    const existingReminders = await getDocs(query(remindersCol(email)))
+    if (!existingReminders.empty) {
+      // Firestore already has data, mark as migrated
+      localStorage.setItem(`${MIGRATION_KEY}-${email}`, 'true')
+      return false
+    }
+  } catch (e) {
+    console.error('Migration: could not check Firestore, skipping:', e)
     return false
   }
 
@@ -120,6 +125,8 @@ export function subscribeReminders(
       }
     })
     callback(reminders)
+  }, (error) => {
+    console.error('Firestore reminders subscription error:', error)
   })
 }
 
@@ -181,6 +188,8 @@ export function subscribePeople(
       }
     })
     callback(people)
+  }, (error) => {
+    console.error('Firestore people subscription error:', error)
   })
 }
 

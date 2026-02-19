@@ -146,11 +146,13 @@ export default function Home() {
       return
     }
 
-    // Migrate localStorage data to Firestore (one-time), then subscribe
-    migrateLocalStorageToFirestore(userEmail).then(() => {
-      if (!userEmail) return
-      unsubReminders.current = subscribeReminders(userEmail, setReminders)
-      unsubPeople.current = subscribePeople(userEmail, setPeople)
+    // Subscribe immediately — don't wait for migration
+    unsubReminders.current = subscribeReminders(userEmail, setReminders)
+    unsubPeople.current = subscribePeople(userEmail, setPeople)
+
+    // Migrate localStorage data to Firestore in the background (one-time)
+    migrateLocalStorageToFirestore(userEmail).catch((e) => {
+      console.error('Migration failed:', e)
     })
 
     return () => {
@@ -272,29 +274,39 @@ export default function Home() {
       isAnniversary: recurrenceOptions?.isAnniversary,
     }
 
-    // Write to Firestore (onSnapshot will update local state)
-    await addReminderDB(userEmail, newReminder)
+    // Write to Firestore
+    try {
+      await addReminderDB(userEmail, newReminder)
+    } catch (e: any) {
+      console.error('Firestore write failed:', e)
+      setStatus(`Failed to save: ${e.message || e}`)
+      setTimeout(() => setStatus(null), 5000)
+      return
+    }
 
     // Detect names for person profile creation
     if (!isUpdate) {
-      const detectedName = getPrimaryDetectedName(rawText)
-      if (detectedName) {
-        const normalizedName = detectedName.name.toLowerCase().trim()
-        const existingPerson = people.find(p => p.name.toLowerCase().trim() === normalizedName)
-        if (existingPerson) {
-          // Auto-link to existing person
-          const updatedIds = [...existingPerson.linkedReminderIds]
-          if (!updatedIds.includes(id)) {
-            updatedIds.push(id)
-            await updatePersonDoc(userEmail, existingPerson.id, { linkedReminderIds: updatedIds })
+      try {
+        const detectedName = getPrimaryDetectedName(rawText)
+        if (detectedName) {
+          const normalizedName = detectedName.name.toLowerCase().trim()
+          const existingPerson = people.find(p => p.name.toLowerCase().trim() === normalizedName)
+          if (existingPerson) {
+            const updatedIds = [...existingPerson.linkedReminderIds]
+            if (!updatedIds.includes(id)) {
+              updatedIds.push(id)
+              await updatePersonDoc(userEmail, existingPerson.id, { linkedReminderIds: updatedIds })
+            }
+          } else {
+            setPendingNameConfirmation({
+              detectedName,
+              reminderId: id,
+              originalText: rawText
+            })
           }
-        } else {
-          setPendingNameConfirmation({
-            detectedName,
-            reminderId: id,
-            originalText: rawText
-          })
         }
+      } catch (e) {
+        console.error('Person detection/linking failed:', e)
       }
     }
 
@@ -314,7 +326,7 @@ export default function Home() {
             recurrence: recurrenceOptions
           })
           if (result?.id) {
-            await updateReminderDB(userEmail, id, { calendarEventId: result.id })
+            await updateReminderDB(userEmail, id, { calendarEventId: result.id }).catch(() => {})
           }
           setStatus(`Updated and synced to calendar`)
         } else {
@@ -328,7 +340,7 @@ export default function Home() {
             recurrence: recurrenceOptions
           })
           if (result?.id) {
-            await updateReminderDB(userEmail, id, { calendarEventId: result.id })
+            await updateReminderDB(userEmail, id, { calendarEventId: result.id }).catch(() => {})
           }
           const successMsg = recurrenceOptions?.isBirthday
             ? 'Birthday reminder created (yearly, with 1-day advance notice)'
@@ -346,7 +358,7 @@ export default function Home() {
         setTimeout(() => setStatus(null), 5000)
       }
     } else {
-      setStatus('Saved. Sign in to Google for calendar reminders.')
+      setStatus('Reminder saved')
       setTimeout(() => setStatus(null), 3000)
     }
   }, [userEmail, people])

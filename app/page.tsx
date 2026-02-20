@@ -341,20 +341,23 @@ export default function Home() {
       const cleanText = text.replace(/update/gi, '').trim()
 
       // Try to find the best matching reminder
+      // Extract meaningful keywords from user input (strip filler/time words)
+      const fillerWords = new Set(['at', 'on', 'to', 'the', 'a', 'an', 'for', 'by', 'am', 'pm', 'today', 'tomorrow', 'tonight', 'this', 'next'])
+      const inputKeywords = cleanText.toLowerCase().split(/\s+/).filter(w =>
+        !fillerWords.has(w) && !/^\d+/.test(w)
+      )
+
       const existingReminder = reminders.find(r => {
-        const reminderWords = r.text.toLowerCase().split(/\s+/)
-        const inputWords = cleanText.toLowerCase().split(/\s+/)
-
-        // Check if reminder name is contained in the input
-        // e.g., "call mom to 4pm" should match reminder "Call mom"
         const reminderName = r.text.toLowerCase()
-        if (cleanText.toLowerCase().includes(reminderName)) return true
 
-        // Check if first few words match (flexible matching)
-        const matchWords = reminderWords.slice(0, 3).filter(w =>
-          !['at', 'on', 'to', 'the', 'a', 'an'].includes(w)
-        )
-        return matchWords.every(word => inputWords.includes(word))
+        // Check if reminder title is contained in input or vice versa
+        if (cleanText.toLowerCase().includes(reminderName)) return true
+        if (reminderName.includes(cleanText.toLowerCase().replace(/\s*(to|at|on)\s+.*$/, '').trim())) return true
+
+        // Check if all input keywords appear in the reminder text
+        if (inputKeywords.length > 0 && inputKeywords.every(kw => reminderName.includes(kw))) return true
+
+        return false
       })
 
       if (existingReminder) {

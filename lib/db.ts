@@ -23,42 +23,72 @@ function peopleCol(email: string) {
   return collection(db, 'users', email, 'people')
 }
 
+// Convert a reminder to a Firestore-safe object (no undefined values)
+function reminderToDoc(r: any) {
+  return {
+    text: r.text || '',
+    date: r.date instanceof Date ? r.date.toISOString() : (typeof r.date === 'string' ? r.date : ''),
+    isCompleted: r.isCompleted === true,
+    calendarEventId: r.calendarEventId || null,
+    isRecurring: r.isRecurring === true,
+    isBirthday: r.isBirthday === true,
+    isAnniversary: r.isAnniversary === true,
+  }
+}
+
+// Convert a person to a Firestore-safe object (no undefined values)
+function personToDoc(p: any) {
+  return {
+    name: p.name || '',
+    linkedReminderIds: Array.isArray(p.linkedReminderIds) ? p.linkedReminderIds : [],
+    createdAt: p.createdAt || new Date().toISOString(),
+    avatarColor: p.avatarColor || 'lavender',
+    relationshipType: p.relationshipType || 'close_friend',
+    birthday: p.birthday || null,
+    email: p.email || null,
+  }
+}
+
 // --- Background sync: write-through to Firestore on every localStorage save ---
 
 export function syncReminderToFirestore(email: string, reminder: Reminder) {
-  const ref = doc(remindersCol(email), reminder.id)
-  setDoc(ref, {
-    text: reminder.text,
-    date: reminder.date instanceof Date ? reminder.date.toISOString() : reminder.date,
-    isCompleted: reminder.isCompleted ?? false,
-    calendarEventId: reminder.calendarEventId ?? null,
-    isRecurring: reminder.isRecurring ?? false,
-    isBirthday: reminder.isBirthday ?? false,
-    isAnniversary: reminder.isAnniversary ?? false,
-  }).catch(e => console.warn('Firestore sync (reminder) failed:', e))
+  try {
+    const ref = doc(remindersCol(email), reminder.id)
+    setDoc(ref, reminderToDoc(reminder))
+      .then(() => console.log('Firestore: synced reminder', reminder.id))
+      .catch(e => console.error('Firestore sync (reminder) FAILED:', e))
+  } catch (e) {
+    console.error('Firestore sync (reminder) error:', e)
+  }
 }
 
 export function deleteReminderFromFirestore(email: string, id: string) {
-  const ref = doc(remindersCol(email), id)
-  deleteDoc(ref).catch(e => console.warn('Firestore delete (reminder) failed:', e))
+  try {
+    const ref = doc(remindersCol(email), id)
+    deleteDoc(ref).catch(e => console.error('Firestore delete (reminder) FAILED:', e))
+  } catch (e) {
+    console.error('Firestore delete (reminder) error:', e)
+  }
 }
 
 export function syncPersonToFirestore(email: string, person: Person) {
-  const ref = doc(peopleCol(email), person.id)
-  setDoc(ref, {
-    name: person.name,
-    linkedReminderIds: person.linkedReminderIds ?? [],
-    createdAt: person.createdAt,
-    avatarColor: person.avatarColor,
-    relationshipType: person.relationshipType ?? 'close_friend',
-    birthday: person.birthday ?? null,
-    email: person.email ?? null,
-  }).catch(e => console.warn('Firestore sync (person) failed:', e))
+  try {
+    const ref = doc(peopleCol(email), person.id)
+    setDoc(ref, personToDoc(person))
+      .then(() => console.log('Firestore: synced person', person.id, person.name))
+      .catch(e => console.error('Firestore sync (person) FAILED:', e))
+  } catch (e) {
+    console.error('Firestore sync (person) error:', e)
+  }
 }
 
 export function deletePersonFromFirestore(email: string, id: string) {
-  const ref = doc(peopleCol(email), id)
-  deleteDoc(ref).catch(e => console.warn('Firestore delete (person) failed:', e))
+  try {
+    const ref = doc(peopleCol(email), id)
+    deleteDoc(ref).catch(e => console.error('Firestore delete (person) FAILED:', e))
+  } catch (e) {
+    console.error('Firestore delete (person) error:', e)
+  }
 }
 
 // --- Full sync: push all localStorage data to Firestore ---
@@ -67,6 +97,8 @@ export function deletePersonFromFirestore(email: string, id: string) {
 export async function fullSyncToFirestore(email: string): Promise<void> {
   if (typeof window === 'undefined') return
 
+  console.log('Firestore: starting full sync for', email)
+
   try {
     // Sync reminders
     const remindersKey = `thoughtful-reminders-${email}`
@@ -74,26 +106,26 @@ export async function fullSyncToFirestore(email: string): Promise<void> {
     if (savedReminders) {
       const parsed = JSON.parse(savedReminders)
       if (Array.isArray(parsed)) {
-        // Get existing Firestore IDs to avoid unnecessary writes
         const existingIds = new Set<string>()
         try {
           const snap = await getDocs(query(remindersCol(email)))
           snap.docs.forEach(d => existingIds.add(d.id))
-        } catch { /* ignore read errors */ }
+        } catch (e) {
+          console.error('Firestore: failed to read existing reminders:', e)
+        }
 
+        let count = 0
         for (const r of parsed) {
           if (existingIds.has(r.id)) continue
-          const ref = doc(remindersCol(email), r.id)
-          await setDoc(ref, {
-            text: r.text,
-            date: typeof r.date === 'string' ? r.date : new Date(r.date).toISOString(),
-            isCompleted: r.isCompleted ?? false,
-            calendarEventId: r.calendarEventId ?? null,
-            isRecurring: r.isRecurring ?? false,
-            isBirthday: r.isBirthday ?? false,
-            isAnniversary: r.isAnniversary ?? false,
-          }).catch(() => {})
+          try {
+            const ref = doc(remindersCol(email), r.id)
+            await setDoc(ref, reminderToDoc(r))
+            count++
+          } catch (e) {
+            console.error('Firestore: failed to sync reminder', r.id, e)
+          }
         }
+        if (count > 0) console.log(`Firestore: synced ${count} reminders`)
       }
     }
 
@@ -107,24 +139,29 @@ export async function fullSyncToFirestore(email: string): Promise<void> {
         try {
           const snap = await getDocs(query(peopleCol(email)))
           snap.docs.forEach(d => existingIds.add(d.id))
-        } catch { /* ignore read errors */ }
+        } catch (e) {
+          console.error('Firestore: failed to read existing people:', e)
+        }
 
+        let count = 0
         for (const p of parsed) {
           if (existingIds.has(p.id)) continue
-          const ref = doc(peopleCol(email), p.id)
-          await setDoc(ref, {
-            name: p.name,
-            linkedReminderIds: p.linkedReminderIds ?? [],
-            createdAt: p.createdAt,
-            avatarColor: p.avatarColor,
-            relationshipType: p.relationshipType ?? 'close_friend',
-            birthday: p.birthday ?? null,
-            email: p.email ?? null,
-          }).catch(() => {})
+          try {
+            const ref = doc(peopleCol(email), p.id)
+            await setDoc(ref, personToDoc(p))
+            count++
+          } catch (e) {
+            console.error('Firestore: failed to sync person', p.id, e)
+          }
         }
+        if (count > 0) console.log(`Firestore: synced ${count} people`)
       }
+    } else {
+      console.log('Firestore: no people found in localStorage at key:', peopleKey)
     }
+
+    console.log('Firestore: full sync complete')
   } catch (e) {
-    console.warn('Full Firestore sync failed:', e)
+    console.error('Firestore: full sync failed:', e)
   }
 }

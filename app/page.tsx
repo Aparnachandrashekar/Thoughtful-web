@@ -271,6 +271,9 @@ export default function Home() {
       setReminders(prev => [newReminder, ...prev])
     }
 
+    // Sync reminder to Firestore
+    if (userEmail) syncReminderToFirestore(userEmail, newReminder)
+
     // Sync with Google Calendar if signed in
     if (isSignedIn()) {
       try {
@@ -475,11 +478,13 @@ export default function Home() {
     const newCompletedState = !reminder.isCompleted
 
     // Update local state
+    const updatedReminder = { ...reminder, isCompleted: newCompletedState }
     setReminders(prev =>
       prev.map(r =>
-        r.id === id ? { ...r, isCompleted: newCompletedState } : r
+        r.id === id ? updatedReminder : r
       )
     )
+    if (userEmail) syncReminderToFirestore(userEmail, updatedReminder)
 
     // If marking as complete and has calendar event, offer to remove from calendar
     if (newCompletedState && reminder.calendarEventId && isSignedIn()) {

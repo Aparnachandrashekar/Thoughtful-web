@@ -133,7 +133,7 @@ export function deletePerson(personId: string, email?: string): void {
 
 export function updatePerson(
   personId: string,
-  updates: Partial<Pick<Person, 'name' | 'avatarColor' | 'relationshipType' | 'birthday' | 'email'>>,
+  updates: Partial<Pick<Person, 'name' | 'avatarColor' | 'relationshipType' | 'birthday' | 'email' | 'phone'>>,
   userEmail?: string
 ): void {
   const people = loadPeople(userEmail)
@@ -145,6 +145,7 @@ export function updatePerson(
     if (updates.relationshipType !== undefined) person.relationshipType = updates.relationshipType
     if (updates.birthday !== undefined) person.birthday = updates.birthday
     if (updates.email !== undefined) person.email = updates.email?.trim() || undefined
+    if (updates.phone !== undefined) person.phone = updates.phone?.trim() || undefined
     savePeople(people, userEmail)
   }
 }

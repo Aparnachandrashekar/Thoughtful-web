@@ -46,6 +46,7 @@ function personToDoc(p: any) {
     relationshipType: p.relationshipType || 'close_friend',
     birthday: p.birthday || null,
     email: p.email || null,
+    phone: p.phone || null,
   }
 }
 

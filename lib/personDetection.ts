@@ -71,11 +71,12 @@ export function detectNamesInText(text: string): DetectedName[] {
         !EXCLUSION_LIST.has(lowerWord)) {
 
       // Skip if it's the first word (might just be sentence start)
-      // unless followed by possessive or specific patterns
+      // unless surrounded by context words (before or after the name)
       const isFirstWord = i === 0 || /[.!?]$/.test(words[i - 1] || '')
+      const nextWordClean = (words[i + 1] || '').toLowerCase().replace(/[^a-z]/g, '')
       const hasContext = word.includes("'s") ||
                          /^(call|text|meet|visit|see|for|with)$/i.test(words[i - 1] || '') ||
-                         /^(birthday|appointment|meeting)$/i.test(words[i + 1] || '')
+                         /^(birthday|appointment|meeting|reminder|call|dinner|lunch|coffee|catchup|meetup|visit|gift|present|party|event|anniversary|drinks|brunch|hangout)$/i.test(nextWordClean)
 
       if (!isFirstWord || hasContext) {
         if (!seenNames.has(lowerWord)) {

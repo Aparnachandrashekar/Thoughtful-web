@@ -40,8 +40,8 @@ export default function ReminderInput({ onSubmit }: ReminderInputProps) {
           Add
         </button>
       </div>
-      <p className="mt-3 text-sm text-gray-500 text-center">
-        Type naturally — we&apos;ll figure out the date and time
+      <p className="mt-3 text-sm text-gray-400 text-center italic">
+        Title &mdash; Day/Date &mdash; Time &nbsp;to create a reminder
       </p>
     </form>
   )

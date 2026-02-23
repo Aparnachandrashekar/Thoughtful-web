@@ -11,6 +11,7 @@ export interface Person {
   relationshipType: RelationshipType  // Required relationship type
   birthday?: string             // Optional birthday (ISO date string)
   email?: string                // Optional email for calendar invites
+  phone?: string                // Optional phone for WhatsApp reminders
 }
 
 export type AvatarColor = 'blush' | 'lavender' | 'mint' | 'peach' | 'sky'

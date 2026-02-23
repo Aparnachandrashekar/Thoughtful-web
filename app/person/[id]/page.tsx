@@ -12,6 +12,7 @@ import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from 
 import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore } from '@/lib/db'
+import { parseReminderInput } from '@/lib/parser'
 
 function getCardColor(index: number): string {
   const colors = ['bg-blush/60', 'bg-lavender/60', 'bg-mint/60', 'bg-peach/60', 'bg-sky/60']
@@ -42,7 +43,11 @@ export default function PersonProfilePage() {
   const [showEditRelationship, setShowEditRelationship] = useState(false)
   const [showEditEmail, setShowEditEmail] = useState(false)
   const [editingEmail, setEditingEmail] = useState('')
+  const [showEditPhone, setShowEditPhone] = useState(false)
+  const [editingPhone, setEditingPhone] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [newReminderText, setNewReminderText] = useState('')
+  const [addingReminder, setAddingReminder] = useState(false)
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
@@ -71,6 +76,7 @@ export default function PersonProfilePage() {
     if (loadedPerson) {
       setPerson(loadedPerson)
       setEditingEmail(loadedPerson.email || '')
+      setEditingPhone(loadedPerson.phone || '')
       const allReminders = loadReminders()
       const linkedReminders = allReminders.filter((r: Reminder) =>
         loadedPerson.linkedReminderIds.includes(r.id) ||
@@ -113,6 +119,90 @@ export default function PersonProfilePage() {
       setShowEditEmail(false)
       setStatus('Email updated')
       setTimeout(() => setStatus(null), 2000)
+    }
+  }
+
+  const handleSavePhone = () => {
+    if (person) {
+      const phoneToSave = editingPhone.trim() || undefined
+      updatePerson(person.id, { phone: phoneToSave }, userEmail || undefined)
+      const updated = { ...person, phone: phoneToSave }
+      setPerson(updated)
+      if (userEmail) syncPersonToFirestore(userEmail, updated)
+      setShowEditPhone(false)
+      setStatus('Phone updated')
+      setTimeout(() => setStatus(null), 2000)
+    }
+  }
+
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newReminderText.trim() || !person || addingReminder) return
+
+    setAddingReminder(true)
+    try {
+      const parsed = parseReminderInput(newReminderText.trim())
+      const dateTime = parsed.date || new Date()
+
+      let friendlyTitle: string
+      try {
+        friendlyTitle = await generateTitle(newReminderText.trim())
+      } catch {
+        friendlyTitle = newReminderText.trim()
+      }
+
+      const id = Date.now().toString()
+      const newReminder: Reminder = {
+        id,
+        text: friendlyTitle,
+        date: dateTime,
+        isCompleted: false,
+        isRecurring: !!parsed.recurrence?.type,
+      }
+
+      const allReminders = loadReminders()
+      const updatedReminders = [newReminder, ...allReminders]
+      saveReminders(updatedReminders)
+
+      linkReminderToPerson(person.id, id, userEmail || undefined)
+      if (userEmail) syncReminderToFirestore(userEmail, newReminder)
+      setReminders(prev => [newReminder, ...prev])
+
+      if (isSignedIn()) {
+        setStatus('Creating calendar event...')
+        const result = await createCalendarEvent({
+          title: friendlyTitle,
+          date: dateTime.toISOString(),
+          recurrence: parsed.recurrence?.type ? {
+            type: parsed.recurrence.type as 'weekly' | 'monthly' | 'yearly' | 'daily',
+            isBirthday: false,
+            isAnniversary: false,
+            endDate: null,
+          } : undefined,
+        })
+
+        if (result?.id) {
+          const updated = updatedReminders.map(r =>
+            r.id === id ? { ...r, calendarEventId: result.id } : r
+          )
+          saveReminders(updated)
+          setReminders(prev => prev.map(r =>
+            r.id === id ? { ...r, calendarEventId: result.id } : r
+          ))
+        }
+        setStatus('Reminder created')
+      } else {
+        setStatus('Saved locally')
+      }
+
+      setNewReminderText('')
+      setTimeout(() => setStatus(null), 2000)
+    } catch (err) {
+      console.error('Error adding reminder:', err)
+      setStatus('Failed to create reminder')
+      setTimeout(() => setStatus(null), 2000)
+    } finally {
+      setAddingReminder(false)
     }
   }
 
@@ -363,6 +453,49 @@ export default function PersonProfilePage() {
                   </button>
                 )}
 
+                {/* Phone button */}
+                {showEditPhone ? (
+                  <div className="flex items-center gap-2 p-2 bg-green-50 rounded-2xl">
+                    <input
+                      type="tel"
+                      value={editingPhone}
+                      onChange={(e) => setEditingPhone(e.target.value)}
+                      placeholder="+1234567890"
+                      className="text-sm px-4 py-2 border-2 border-green-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none w-44"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSavePhone}
+                      className="px-4 py-2 bg-green-500 text-white rounded-xl font-semibold text-sm hover:bg-green-600 transition-all"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowEditPhone(false)
+                        setEditingPhone(person.phone || '')
+                      }}
+                      className="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowEditPhone(true)}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm transition-all hover:scale-[1.02] ${
+                      person.phone
+                        ? 'bg-green-100 text-gray-700 hover:bg-green-200'
+                        : 'bg-green-200 text-gray-800 hover:bg-green-300 shadow-sm'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    <span>{person.phone || 'Add phone for WhatsApp'}</span>
+                  </button>
+                )}
+
                 {/* Edit relationship button */}
                 <button
                   onClick={handleEditRelationship}
@@ -407,6 +540,28 @@ export default function PersonProfilePage() {
 
           {/* Reminders List */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Add Reminder Input */}
+            <form onSubmit={handleAddReminder} className="flex gap-3">
+              <input
+                type="text"
+                value={newReminderText}
+                onChange={(e) => setNewReminderText(e.target.value)}
+                placeholder={`Add a reminder for ${person.name}...`}
+                className="flex-1 px-5 py-3 text-base bg-white border-2 border-lavender/50 rounded-2xl
+                           placeholder:text-gray-400 focus:border-lavender focus:ring-0 focus:outline-none
+                           shadow-sm hover:shadow-md transition-shadow"
+              />
+              <button
+                type="submit"
+                disabled={!newReminderText.trim() || addingReminder}
+                className="px-6 py-3 bg-lavender text-gray-700 font-semibold rounded-2xl
+                           hover:bg-lavender/80 disabled:opacity-40 disabled:cursor-not-allowed
+                           transition-all active:scale-95"
+              >
+                {addingReminder ? '...' : 'Add'}
+              </button>
+            </form>
+
             {/* Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-white/60 backdrop-blur-sm rounded-2xl border border-gray-100 w-fit">
               <button
@@ -468,15 +623,30 @@ export default function PersonProfilePage() {
                           {activeTab === 'past' && <span className="ml-2 text-green-600 font-medium">✓ Done</span>}
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleDeleteReminder(reminder.id)}
-                        className="text-gray-400 hover:text-red-500 p-2 hover:bg-white/50 rounded-xl transition-all"
-                        title="Delete reminder"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            const msg = `Reminder: ${reminder.text} - ${formatDate(reminder.date)}`
+                            const phone = person.phone ? person.phone.replace(/[^0-9]/g, '') : ''
+                            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+                          }}
+                          className="text-gray-400 hover:text-green-600 p-2 hover:bg-white/50 rounded-xl transition-all"
+                          title="Send via WhatsApp"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteReminder(reminder.id)}
+                          className="text-gray-400 hover:text-red-500 p-2 hover:bg-white/50 rounded-xl transition-all"
+                          title="Delete reminder"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

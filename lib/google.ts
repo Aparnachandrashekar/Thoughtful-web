@@ -181,6 +181,28 @@ function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   return [rule]
 }
 
+// Format a Date as local ISO string (without UTC Z suffix)
+// Google Calendar needs local time + timeZone, NOT UTC
+function toLocalISOString(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+// Fetch with 10-second timeout
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal })
+    clearTimeout(timeout)
+    return res
+  } catch (e: any) {
+    clearTimeout(timeout)
+    if (e.name === 'AbortError') throw new Error('Request timed out (10s)')
+    throw new Error(`Network error: ${e.message}`)
+  }
+}
+
 export async function createCalendarEvent(event: {
   title: string
   date: string
@@ -188,24 +210,24 @@ export async function createCalendarEvent(event: {
   addMeetLink?: boolean
   attendeeEmail?: string
 }) {
-  // Ensure we have a valid token
   if (!isSignedIn()) {
-    console.error('createCalendarEvent: Not signed in, accessToken:', !!accessToken)
     throw new Error('Not signed in')
   }
 
-  console.log('createCalendarEvent: Using token:', accessToken?.substring(0, 20) + '...')
-
-  // Get user's timezone
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-  // Build reminders - for birthdays, add 1 day before + at event time
+  // Convert the date string to local ISO format (no UTC shift)
+  const startDate = new Date(event.date)
+  const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
+  const startDateTime = toLocalISOString(startDate)
+  const endDateTime = toLocalISOString(endDate)
+
   const reminders = event.recurrence?.isBirthday || event.recurrence?.isAnniversary
     ? {
         useDefault: false,
         overrides: [
-          { method: 'popup', minutes: 1440 },  // 1 day before
-          { method: 'popup', minutes: 0 },      // At event time
+          { method: 'popup', minutes: 1440 },
+          { method: 'popup', minutes: 0 },
         ],
       }
     : {
@@ -217,12 +239,11 @@ export async function createCalendarEvent(event: {
 
   const eventBody: Record<string, unknown> = {
     summary: event.title,
-    start: { dateTime: event.date, timeZone },
-    end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString(), timeZone },
+    start: { dateTime: startDateTime, timeZone },
+    end: { dateTime: endDateTime, timeZone },
     reminders,
   }
 
-  // Add recurrence rule if applicable
   if (event.recurrence) {
     const recurrence = buildRecurrenceRule(event.recurrence)
     if (recurrence) {
@@ -230,7 +251,6 @@ export async function createCalendarEvent(event: {
     }
   }
 
-  // Add Google Meet link if requested
   if (event.addMeetLink) {
     eventBody.conferenceData = {
       createRequest: {
@@ -240,19 +260,15 @@ export async function createCalendarEvent(event: {
     }
   }
 
-  // Add attendee if email provided
   if (event.attendeeEmail) {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
-  console.log('Creating calendar event:', JSON.stringify(eventBody, null, 2))
-
-  // Use conferenceDataVersion=1 if adding Meet link
   const url = event.addMeetLink
     ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
     : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -263,8 +279,8 @@ export async function createCalendarEvent(event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    console.error('Calendar API error:', err)
-    throw new Error(err.error?.message || 'Failed to create event')
+    const msg = err.error?.message || `Calendar API error (${res.status})`
+    throw new Error(msg)
   }
 
   return res.json()
@@ -276,7 +292,11 @@ export async function updateCalendarEvent(eventId: string, event: {
 }) {
   if (!accessToken) throw new Error('Not signed in')
 
-  const res = await fetch(
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const startDate = new Date(event.date)
+  const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
+
+  const res = await fetchWithTimeout(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
     {
       method: 'PATCH',
@@ -286,15 +306,15 @@ export async function updateCalendarEvent(eventId: string, event: {
       },
       body: JSON.stringify({
         summary: event.title,
-        start: { dateTime: event.date },
-        end: { dateTime: new Date(new Date(event.date).getTime() + 30 * 60 * 1000).toISOString() },
+        start: { dateTime: toLocalISOString(startDate), timeZone },
+        end: { dateTime: toLocalISOString(endDate), timeZone },
       }),
     }
   )
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Failed to update event')
+    throw new Error(err.error?.message || `Calendar update failed (${res.status})`)
   }
 
   return res.json()
@@ -303,11 +323,15 @@ export async function updateCalendarEvent(eventId: string, event: {
 export async function deleteCalendarEvent(eventId: string) {
   if (!accessToken) return
 
-  await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }
-  )
+  try {
+    await fetchWithTimeout(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    )
+  } catch {
+    // Deletion is best-effort
+  }
 }

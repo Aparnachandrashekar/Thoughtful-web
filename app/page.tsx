@@ -18,7 +18,8 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-  RecurrenceOptions
+  RecurrenceOptions,
+  getStoredEmail
 } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 import { Person, DetectedName } from '@/lib/types'
@@ -110,7 +111,16 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true)
-    // Init Google auth
+
+    // Restore user session from localStorage BEFORE Google script loads
+    // This ensures data loads immediately even if token is expired
+    const storedEmail = getStoredEmail()
+    if (storedEmail) {
+      setSignedIn(true)
+      setUserEmail(storedEmail)
+    }
+
+    // Init Google auth (for calendar API access)
     try {
       const script = document.createElement('script')
       script.src = 'https://accounts.google.com/gsi/client'
@@ -120,8 +130,8 @@ export default function Home() {
         if (clientId) {
           initGoogleAuth(clientId)
           setGoogleReady(true)
-          // Check if already signed in (from localStorage)
-          if (isSignedIn()) {
+          // If we have a valid token, ensure state is set
+          if (isSignedIn() && !storedEmail) {
             setSignedIn(true)
             setUserEmail(getUserEmail())
           }

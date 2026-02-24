@@ -25,12 +25,17 @@ export function initGoogleAuth(clientId: string) {
     if (Date.now() < expiryTime) {
       accessToken = savedToken
       userEmail = savedEmail
-      if (onSignIn) onSignIn(savedEmail)
-    } else {
-      // Token expired, clear it
+      // onSignIn may not be set yet — caller checks isSignedIn() after init
+    }
+    // If expired, DON'T clear email — keep it for data loading.
+    // Only clear the token so isSignedIn() returns false and
+    // calendar calls prompt a re-auth, but user data still loads.
+    else {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      localStorage.removeItem(USER_EMAIL_KEY)
+      // Keep USER_EMAIL_KEY so reminders/people still load
+      accessToken = null
+      userEmail = savedEmail  // still set email for data access
     }
   }
 

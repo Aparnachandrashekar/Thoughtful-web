@@ -11,6 +11,13 @@ export interface Reminder {
   isRecurring?: boolean
   isBirthday?: boolean
   isAnniversary?: boolean
+  // WhatsApp / trigger fields
+  message?: string
+  personName?: string
+  phoneNumber?: string
+  whatsappLink?: string
+  triggerAt?: number    // UNIX timestamp in ms
+  createdAt?: number    // UNIX timestamp in ms
 }
 
 interface ReminderListProps {

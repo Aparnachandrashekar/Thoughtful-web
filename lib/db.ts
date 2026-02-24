@@ -24,7 +24,11 @@ function peopleCol(email: string) {
 }
 
 // Convert a reminder to a Firestore-safe object (no undefined values)
-function reminderToDoc(r: any) {
+function reminderToDoc(r: any, userId?: string) {
+  const dateMs = r.date instanceof Date ? r.date.getTime()
+    : typeof r.date === 'string' ? new Date(r.date).getTime()
+    : 0
+
   return {
     text: r.text || '',
     date: r.date instanceof Date ? r.date.toISOString() : (typeof r.date === 'string' ? r.date : ''),
@@ -33,6 +37,14 @@ function reminderToDoc(r: any) {
     isRecurring: r.isRecurring === true,
     isBirthday: r.isBirthday === true,
     isAnniversary: r.isAnniversary === true,
+    // WhatsApp / trigger fields
+    message: r.message || r.text || '',
+    personName: r.personName || null,
+    phoneNumber: r.phoneNumber || null,
+    whatsappLink: r.whatsappLink || null,
+    triggerAt: r.triggerAt || dateMs || 0,
+    createdAt: r.createdAt || Date.now(),
+    userId: userId || null,
   }
 }
 
@@ -55,7 +67,7 @@ function personToDoc(p: any) {
 export function syncReminderToFirestore(email: string, reminder: Reminder) {
   try {
     const ref = doc(remindersCol(email), reminder.id)
-    setDoc(ref, reminderToDoc(reminder))
+    setDoc(ref, reminderToDoc(reminder, email))
       .then(() => console.log('Firestore: synced reminder', reminder.id))
       .catch(e => console.error('Firestore sync (reminder) FAILED:', e))
   } catch (e) {
@@ -120,7 +132,7 @@ export async function fullSyncToFirestore(email: string): Promise<void> {
           if (existingIds.has(r.id)) continue
           try {
             const ref = doc(remindersCol(email), r.id)
-            await setDoc(ref, reminderToDoc(r))
+            await setDoc(ref, reminderToDoc(r, email))
             count++
           } catch (e) {
             console.error('Firestore: failed to sync reminder', r.id, e)

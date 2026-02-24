@@ -221,6 +221,8 @@ export default function Home() {
     const id = existingReminder?.id || Date.now().toString()
 
     // Detect names IMMEDIATELY (before any async work) so the modal shows right away
+    let detectedPersonName: string | undefined
+    let detectedPhone: string | undefined
     if (!isUpdate) {
       const detectedName = getPrimaryDetectedName(rawText)
       if (detectedName) {
@@ -228,7 +230,10 @@ export default function Home() {
         if (existingPerson) {
           linkReminderToPerson(existingPerson.id, id, userEmail || undefined)
           refreshPeople()
+          detectedPersonName = existingPerson.name
+          detectedPhone = existingPerson.phone
         } else {
+          detectedPersonName = detectedName.name
           setPendingNameConfirmation({
             detectedName,
             reminderId: id,
@@ -254,6 +259,12 @@ export default function Home() {
       }
     }
 
+    const triggerAt = date.getTime()
+    const phoneClean = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : undefined
+    const whatsappLink = phoneClean
+      ? `https://wa.me/${phoneClean.replace(/^\+/, '')}?text=${encodeURIComponent(friendlyTitle)}`
+      : undefined
+
     const newReminder: Reminder = {
       id,
       text: friendlyTitle,
@@ -263,6 +274,12 @@ export default function Home() {
       isRecurring: !!recurrenceOptions?.type,
       isBirthday: recurrenceOptions?.isBirthday,
       isAnniversary: recurrenceOptions?.isAnniversary,
+      message: friendlyTitle,
+      personName: detectedPersonName,
+      phoneNumber: phoneClean,
+      whatsappLink,
+      triggerAt,
+      createdAt: Date.now(),
     }
 
     if (isUpdate && existingReminder) {

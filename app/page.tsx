@@ -25,7 +25,7 @@ import { generateTitle } from '@/lib/ai'
 import { Person, DetectedName } from '@/lib/types'
 import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
 import { getPrimaryDetectedName } from '@/lib/personDetection'
-import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore } from '@/lib/db'
+import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore, pullFromFirestore } from '@/lib/db'
 import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
 
 // Helper to generate human-readable pattern description
@@ -197,11 +197,24 @@ export default function Home() {
     }
   }, [reminders, mounted, saveReminders])
 
-  // Background sync to Firestore + start reminder engine (once) when user signs in
+  // Sync with Firestore: pull first (for new devices), then push, then reload UI
   const engineStarted = useRef(false)
   useEffect(() => {
     if (userEmail) {
-      fullSyncToFirestore(userEmail).catch(() => {})
+      // Pull from Firestore first (populates localStorage on new devices),
+      // then push any local-only data, then reload UI state
+      pullFromFirestore(userEmail)
+        .then(({ reminders, people }) => {
+          if (reminders > 0 || people > 0) {
+            // Reload UI from localStorage which now has Firestore data
+            loadReminders()
+            setPeople(loadPeople(userEmail || undefined))
+          }
+          // Then push any local-only items to Firestore
+          return fullSyncToFirestore(userEmail)
+        })
+        .catch(() => {})
+
       if (!engineStarted.current) {
         engineStarted.current = true
         startReminderEngine(userEmail)
@@ -211,7 +224,7 @@ export default function Home() {
       stopReminderEngine()
       engineStarted.current = false
     }
-  }, [userEmail])
+  }, [userEmail, loadReminders])
 
   const handleGoogleSignIn = () => {
     signIn((email) => {

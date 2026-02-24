@@ -12,7 +12,7 @@ import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSH
 import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
 import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
-import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore } from '@/lib/db'
+import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore, pullFromFirestore } from '@/lib/db'
 import { parseReminder } from '@/lib/parser'
 
 function getCardColor(index: number): string {
@@ -74,21 +74,50 @@ export default function PersonProfilePage() {
 
   useEffect(() => {
     const email = getStoredEmail()
-    const loadedPerson = getPersonById(personId, email || undefined)
-    if (loadedPerson) {
-      setPerson(loadedPerson)
-      setEditingEmail(loadedPerson.email || '')
-      setEditingPhone(loadedPerson.phone || '')
-      const allReminders = loadReminders()
-      const linkedReminders = allReminders.filter((r: Reminder) =>
-        loadedPerson.linkedReminderIds.includes(r.id) ||
-        r.text.toLowerCase().includes(loadedPerson.name.toLowerCase())
-      )
-      setReminders(linkedReminders)
+
+    const loadPersonData = () => {
+      const loadedPerson = getPersonById(personId, email || undefined)
+      if (loadedPerson) {
+        setPerson(loadedPerson)
+        setEditingEmail(loadedPerson.email || '')
+        setEditingPhone(loadedPerson.phone || '')
+        const allReminders = loadReminders()
+        const linkedReminders = allReminders.filter((r: Reminder) =>
+          loadedPerson.linkedReminderIds.includes(r.id) ||
+          r.text.toLowerCase().includes(loadedPerson.name.toLowerCase())
+        )
+        setReminders(linkedReminders)
+        return true
+      }
+      return false
+    }
+
+    // Try loading from localStorage first
+    if (loadPersonData()) {
+      setIsLoading(false)
+      // Also pull from Firestore in background to get latest data
+      if (email) {
+        pullFromFirestore(email).then(({ reminders, people }) => {
+          if (reminders > 0 || people > 0) {
+            loadPersonData() // Reload with fresh data
+          }
+        }).catch(() => {})
+      }
+    } else if (email) {
+      // Person not in localStorage — try pulling from Firestore first
+      pullFromFirestore(email).then(() => {
+        if (!loadPersonData()) {
+          setError('Person not found')
+        }
+        setIsLoading(false)
+      }).catch(() => {
+        setError('Person not found')
+        setIsLoading(false)
+      })
     } else {
       setError('Person not found')
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }, [personId, loadReminders])
 
   const handleSelectTemplate = (template: CareTemplate, generatedText: string) => {

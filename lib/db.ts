@@ -44,7 +44,7 @@ function reminderToDoc(r: any, userId?: string) {
     personName: r.personName || null,
     phoneNumber: r.phoneNumber || null,
     whatsappLink: r.phoneNumber
-      ? `https://wa.me/${(r.phoneNumber || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(r.message || r.text || '')}`
+      ? `https://wa.me/${(r.phoneNumber || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
       : null,
     triggerAt: typeof r.triggerAt === 'number' ? r.triggerAt : dateMs,
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),

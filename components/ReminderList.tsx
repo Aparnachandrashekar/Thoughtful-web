@@ -115,8 +115,9 @@ export default function ReminderList({ reminders, onToggle, onDelete }: Reminder
                   <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                     <button
                       onClick={() => {
-                        const msg = `Reminder: ${reminder.text} - ${formatDate(reminder.date)}`
-                        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+                        const phone = reminder.phoneNumber ? reminder.phoneNumber.replace(/[^0-9]/g, '') : ''
+                        const msg = 'Hey!'
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
                       }}
                       className="text-gray-400 hover:text-green-600 p-1.5 sm:p-2 hover:bg-white/50 rounded-xl transition-all"
                       title="Send via WhatsApp"

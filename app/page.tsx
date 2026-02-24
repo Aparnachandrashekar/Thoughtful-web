@@ -297,7 +297,7 @@ export default function Home() {
     const message = friendlyTitle
     const triggerAt = date.getTime()
     const whatsappLink = phoneNumber
-      ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+      ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
       : undefined
 
     const newReminder: Reminder = {

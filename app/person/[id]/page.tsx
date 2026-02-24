@@ -182,7 +182,7 @@ export default function PersonProfilePage() {
       const message = friendlyTitle
       const triggerAt = dateTime.getTime()
       const whatsappLink = phoneNumber
-        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
         : undefined
 
       const newReminder: Reminder = {
@@ -310,7 +310,7 @@ export default function PersonProfilePage() {
       const message = friendlyTitle
       const triggerAt = dateTime.getTime()
       const whatsappLink = phoneNumber
-        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
         : undefined
 
       const newReminder: Reminder = {
@@ -721,13 +721,9 @@ export default function PersonProfilePage() {
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => {
-                            if (reminder.whatsappLink) {
-                              window.open(reminder.whatsappLink, '_blank')
-                            } else {
-                              const msg = `Reminder: ${reminder.text} - ${formatDate(reminder.date)}`
-                              const phone = person.phone ? person.phone.replace(/[^0-9]/g, '') : ''
-                              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
-                            }
+                            const phone = (reminder.phoneNumber || person.phone || '').replace(/[^0-9]/g, '')
+                            const msg = 'Hey!'
+                            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
                           }}
                           className="text-gray-400 hover:text-green-600 p-1.5 sm:p-2 hover:bg-white/50 rounded-xl transition-all"
                           title="Send via WhatsApp"

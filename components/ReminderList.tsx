@@ -58,16 +58,27 @@ function getCardColor(index: number): string {
   return colors[index % colors.length]
 }
 
-// Find phone number for a reminder by checking the reminder's stored phone,
-// then looking up the linked person by name in the people list
+// Find phone number for a reminder by checking all possible links to a person
 function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
+  // 1. Phone stored directly on the reminder
   if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
-  if (!people || !reminder.personName) return ''
-  const person = people.find(p => p.name.toLowerCase() === reminder.personName!.toLowerCase())
-  if (person?.phone) return person.phone.replace(/[^0-9]/g, '')
-  // Also check if the reminder text mentions a person's name
-  const matched = people.find(p => p.phone && reminder.text.toLowerCase().includes(p.name.toLowerCase()))
-  if (matched?.phone) return matched.phone.replace(/[^0-9]/g, '')
+  if (!people || people.length === 0) return ''
+
+  // 2. Person who has this reminder in their linkedReminderIds
+  const linkedPerson = people.find(p => p.phone && p.linkedReminderIds.includes(reminder.id))
+  if (linkedPerson?.phone) return linkedPerson.phone.replace(/[^0-9]/g, '')
+
+  // 3. Match by personName stored on the reminder
+  if (reminder.personName) {
+    const namedPerson = people.find(p => p.phone && p.name.toLowerCase() === reminder.personName!.toLowerCase())
+    if (namedPerson?.phone) return namedPerson.phone.replace(/[^0-9]/g, '')
+  }
+
+  // 4. Check if the reminder text mentions any person's name
+  const textLower = reminder.text.toLowerCase()
+  const textMatch = people.find(p => p.phone && textLower.includes(p.name.toLowerCase()))
+  if (textMatch?.phone) return textMatch.phone.replace(/[^0-9]/g, '')
+
   return ''
 }
 

@@ -6,6 +6,7 @@ import PersonAvatar from '@/components/PersonAvatar'
 import CareActionsPanel from '@/components/CareActionsPanel'
 import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
 import RelationshipTypeModal from '@/components/RelationshipTypeModal'
+import DatePickerModal from '@/components/DatePickerModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
 import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
@@ -48,6 +49,7 @@ export default function PersonProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [newReminderText, setNewReminderText] = useState('')
   const [addingReminder, setAddingReminder] = useState(false)
+  const [pendingProfileReminder, setPendingProfileReminder] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
@@ -135,20 +137,15 @@ export default function PersonProfilePage() {
     }
   }
 
-  const handleAddReminder = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newReminderText.trim() || !person || addingReminder) return
-
+  const createReminderWithDate = async (text: string, dateTime: Date) => {
+    if (!person) return
     setAddingReminder(true)
     try {
-      const parsed = parseReminder(newReminderText.trim())
-      const dateTime = parsed.date || new Date()
-
       let friendlyTitle: string
       try {
-        friendlyTitle = await generateTitle(newReminderText.trim())
+        friendlyTitle = await generateTitle(text)
       } catch {
-        friendlyTitle = newReminderText.trim()
+        friendlyTitle = text
       }
 
       const id = Date.now().toString()
@@ -164,7 +161,6 @@ export default function PersonProfilePage() {
         text: friendlyTitle,
         date: dateTime,
         isCompleted: false,
-        isRecurring: !!parsed.recurrence?.type,
         message,
         personName: person.name,
         phoneNumber,
@@ -187,12 +183,6 @@ export default function PersonProfilePage() {
         const result = await createCalendarEvent({
           title: friendlyTitle,
           date: dateTime.toISOString(),
-          recurrence: parsed.recurrence?.type ? {
-            type: parsed.recurrence.type as 'weekly' | 'monthly' | 'yearly' | 'daily',
-            isBirthday: false,
-            isAnniversary: false,
-            endDate: null,
-          } : undefined,
         })
 
         if (result?.id) {
@@ -217,6 +207,27 @@ export default function PersonProfilePage() {
       setTimeout(() => setStatus(null), 2000)
     } finally {
       setAddingReminder(false)
+    }
+  }
+
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newReminderText.trim() || !person || addingReminder) return
+
+    const parsed = parseReminder(newReminderText.trim())
+
+    if (parsed.date) {
+      await createReminderWithDate(newReminderText.trim(), parsed.date)
+    } else {
+      // No date found — open date picker
+      setPendingProfileReminder(newReminderText.trim())
+    }
+  }
+
+  const handleProfileDatePicked = (date: Date) => {
+    if (pendingProfileReminder) {
+      createReminderWithDate(pendingProfileReminder, date)
+      setPendingProfileReminder(null)
     }
   }
 
@@ -734,6 +745,15 @@ export default function PersonProfilePage() {
       )}
 
       {/* Delete Confirmation Modal */}
+      {/* Date Picker Modal for profile reminders */}
+      {pendingProfileReminder && (
+        <DatePickerModal
+          text={pendingProfileReminder}
+          onConfirm={handleProfileDatePicked}
+          onCancel={() => setPendingProfileReminder(null)}
+        />
+      )}
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirm(false)} />

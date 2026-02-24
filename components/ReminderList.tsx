@@ -18,6 +18,7 @@ export interface Reminder {
   whatsappLink?: string
   triggerAt?: number    // UNIX timestamp in ms
   createdAt?: number    // UNIX timestamp in ms
+  triggered?: boolean   // true after notification fired
 }
 
 interface ReminderListProps {

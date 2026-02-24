@@ -25,6 +25,7 @@ import { Person, DetectedName } from '@/lib/types'
 import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
 import { getPrimaryDetectedName } from '@/lib/personDetection'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore } from '@/lib/db'
+import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
 
 // Helper to generate human-readable pattern description
 function getPatternDescription(recurrence: RecurrenceInfo): string {
@@ -186,10 +187,19 @@ export default function Home() {
     }
   }, [reminders, mounted, saveReminders])
 
-  // Background sync to Firestore when user signs in
+  // Background sync to Firestore + start reminder engine (once) when user signs in
+  const engineStarted = useRef(false)
   useEffect(() => {
     if (userEmail) {
       fullSyncToFirestore(userEmail).catch(() => {})
+      if (!engineStarted.current) {
+        engineStarted.current = true
+        startReminderEngine(userEmail)
+      }
+    }
+    return () => {
+      stopReminderEngine()
+      engineStarted.current = false
     }
   }, [userEmail])
 
@@ -203,6 +213,7 @@ export default function Home() {
   }
 
   const handleGoogleSignOut = () => {
+    stopReminderEngine()
     signOut()
     setSignedIn(false)
     setUserEmail(null)
@@ -259,11 +270,12 @@ export default function Home() {
       }
     }
 
+    const phoneNumber = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : null
+    const message = friendlyTitle
     const triggerAt = date.getTime()
-    const phoneClean = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : undefined
-    const whatsappLink = phoneClean
-      ? `https://wa.me/${phoneClean.replace(/^\+/, '')}?text=${encodeURIComponent(friendlyTitle)}`
-      : undefined
+    const whatsappLink = phoneNumber
+      ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+      : null
 
     const newReminder: Reminder = {
       id,
@@ -274,12 +286,13 @@ export default function Home() {
       isRecurring: !!recurrenceOptions?.type,
       isBirthday: recurrenceOptions?.isBirthday,
       isAnniversary: recurrenceOptions?.isAnniversary,
-      message: friendlyTitle,
-      personName: detectedPersonName,
-      phoneNumber: phoneClean,
+      message,
+      personName: detectedPersonName || null,
+      phoneNumber,
       whatsappLink,
       triggerAt,
       createdAt: Date.now(),
+      triggered: false,
     }
 
     if (isUpdate && existingReminder) {

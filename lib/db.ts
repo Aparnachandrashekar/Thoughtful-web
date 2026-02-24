@@ -7,7 +7,9 @@ import {
   setDoc,
   deleteDoc,
   getDocs,
+  updateDoc,
   query,
+  where,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { Reminder } from '@/components/ReminderList'
@@ -41,10 +43,13 @@ function reminderToDoc(r: any, userId?: string) {
     message: r.message || r.text || '',
     personName: r.personName || null,
     phoneNumber: r.phoneNumber || null,
-    whatsappLink: r.whatsappLink || null,
-    triggerAt: r.triggerAt || dateMs || 0,
-    createdAt: r.createdAt || Date.now(),
+    whatsappLink: r.phoneNumber
+      ? `https://wa.me/${(r.phoneNumber || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(r.message || r.text || '')}`
+      : null,
+    triggerAt: typeof r.triggerAt === 'number' ? r.triggerAt : dateMs,
+    createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
     userId: userId || null,
+    triggered: r.triggered === true ? true : false,
   }
 }
 
@@ -101,6 +106,38 @@ export function deletePersonFromFirestore(email: string, id: string) {
     deleteDoc(ref).catch(e => console.error('Firestore delete (person) FAILED:', e))
   } catch (e) {
     console.error('Firestore delete (person) error:', e)
+  }
+}
+
+// --- Reminder trigger engine helpers ---
+
+export function getRemindersCollection(email: string) {
+  return remindersCol(email)
+}
+
+export async function getDueReminders(email: string): Promise<Array<{ id: string; [key: string]: any }>> {
+  try {
+    const col = remindersCol(email)
+    const q = query(
+      col,
+      where('triggered', '==', false),
+      where('triggerAt', '<=', Date.now())
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  } catch (e) {
+    console.error('Firestore: failed to query due reminders:', e)
+    return []
+  }
+}
+
+export async function markReminderTriggered(email: string, reminderId: string): Promise<void> {
+  try {
+    const ref = doc(remindersCol(email), reminderId)
+    await updateDoc(ref, { triggered: true })
+    console.log('Firestore: marked reminder triggered', reminderId)
+  } catch (e) {
+    console.error('Firestore: failed to mark triggered', reminderId, e)
   }
 }
 

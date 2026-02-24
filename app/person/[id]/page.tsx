@@ -152,11 +152,12 @@ export default function PersonProfilePage() {
       }
 
       const id = Date.now().toString()
+      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : null
+      const message = friendlyTitle
       const triggerAt = dateTime.getTime()
-      const phoneClean = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
-      const whatsappLink = phoneClean
-        ? `https://wa.me/${phoneClean.replace(/^\+/, '')}?text=${encodeURIComponent(friendlyTitle)}`
-        : undefined
+      const whatsappLink = phoneNumber
+        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+        : null
 
       const newReminder: Reminder = {
         id,
@@ -164,12 +165,13 @@ export default function PersonProfilePage() {
         date: dateTime,
         isCompleted: false,
         isRecurring: !!parsed.recurrence?.type,
-        message: friendlyTitle,
+        message,
         personName: person.name,
-        phoneNumber: phoneClean,
+        phoneNumber,
         whatsappLink,
         triggerAt,
         createdAt: Date.now(),
+        triggered: false,
       }
 
       const allReminders = loadReminders()
@@ -264,11 +266,12 @@ export default function PersonProfilePage() {
       const friendlyTitle = await generateTitle(data.reminderText)
 
       const id = Date.now().toString()
+      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : null
+      const message = friendlyTitle
       const triggerAt = dateTime.getTime()
-      const phoneClean = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
-      const whatsappLink = phoneClean
-        ? `https://wa.me/${phoneClean.replace(/^\+/, '')}?text=${encodeURIComponent(friendlyTitle)}`
-        : undefined
+      const whatsappLink = phoneNumber
+        ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+        : null
 
       const newReminder: Reminder = {
         id,
@@ -276,12 +279,13 @@ export default function PersonProfilePage() {
         date: dateTime,
         isCompleted: false,
         isRecurring: data.isRecurring,
-        message: friendlyTitle,
+        message,
         personName: person.name,
-        phoneNumber: phoneClean,
+        phoneNumber,
         whatsappLink,
         triggerAt,
         createdAt: Date.now(),
+        triggered: false,
       }
 
       const allReminders = loadReminders()

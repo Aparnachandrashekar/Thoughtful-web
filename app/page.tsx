@@ -574,25 +574,25 @@ export default function Home() {
         />
       )}
 
-      <main className="flex-1 px-6 md:px-12 py-8 md:py-12">
+      <main className="flex-1 px-4 sm:px-6 md:px-12 py-6 sm:py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-800 tracking-tight">
+        <div className="text-center mb-8 sm:mb-12 animate-fade-in">
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-gray-800 tracking-tight">
             Thoughtful
           </h1>
-          <p className="mt-4 text-gray-500 text-lg md:text-xl max-w-2xl mx-auto">
+          <p className="mt-3 sm:mt-4 text-gray-500 text-base sm:text-lg md:text-xl max-w-2xl mx-auto">
             Your guide to building beautiful relationships by being thoughtful
           </p>
         </div>
 
         {/* Google Sign-in */}
-        <div className="flex justify-center mb-8 animate-fade-in">
+        <div className="flex justify-center mb-6 sm:mb-8 animate-fade-in">
           {googleReady && !signedIn ? (
             <button
               onClick={handleGoogleSignIn}
-              className="flex items-center gap-3 px-8 py-4 bg-white border-2 border-gray-200
-                         rounded-2xl text-base font-semibold text-gray-700 hover:border-lavender
+              className="flex items-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-white border-2 border-gray-200
+                         rounded-2xl text-sm sm:text-base font-semibold text-gray-700 hover:border-lavender
                          hover:shadow-lg hover:scale-[1.02] transition-all duration-200 active:scale-95"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -624,12 +624,12 @@ export default function Home() {
             </div>
 
             {/* Help text */}
-            <div className="text-center mb-8 p-4 bg-white/50 rounded-2xl border border-gray-100">
-              <p className="text-sm text-gray-500">
+            <div className="text-center mb-6 sm:mb-8 p-3 sm:p-4 bg-white/50 rounded-2xl border border-gray-100">
+              <p className="text-xs sm:text-sm text-gray-500">
                 Click X to delete. To edit, type <span className="font-semibold text-gray-600">&quot;update&quot;</span> followed by the event name and new details.
               </p>
-              <p className="text-xs text-gray-400 mt-2">
-                Recurring: &quot;every Friday&quot;, &quot;alternating Mondays&quot;, &quot;last Saturday of the month&quot;, &quot;until Dec 2026&quot;
+              <p className="text-xs text-gray-400 mt-1.5 sm:mt-2">
+                Recurring: &quot;every Friday&quot;, &quot;alternating Mondays&quot;, &quot;last Saturday of the month&quot;
               </p>
             </div>
 
@@ -641,10 +641,10 @@ export default function Home() {
             />
           </>
         ) : (
-          <div className="text-center py-16 animate-fade-in">
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-12 border border-gray-100 max-w-md mx-auto">
-              <div className="text-5xl mb-4">💜</div>
-              <p className="text-gray-500 text-lg">Sign in with Google to start creating reminders</p>
+          <div className="text-center py-10 sm:py-16 animate-fade-in">
+            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 sm:p-12 border border-gray-100 max-w-md mx-auto">
+              <div className="text-4xl sm:text-5xl mb-4">💜</div>
+              <p className="text-gray-500 text-base sm:text-lg">Sign in with Google to start creating reminders</p>
             </div>
           </div>
         )}

@@ -74,7 +74,7 @@ export default function TemplateConfirmationModal({
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-md w-full mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-2xl shadow-xl p-4 sm:p-6 max-w-md w-full mx-3 sm:mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="space-y-5">
           {/* Header */}
           <div className="text-center">

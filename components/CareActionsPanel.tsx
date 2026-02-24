@@ -40,11 +40,11 @@ export default function CareActionsPanel({
   return (
     <div className="bg-white/80 backdrop-blur-sm border border-gray-100 rounded-2xl overflow-hidden">
       {/* Header with relationship type */}
-      <div className="px-5 py-4 bg-gradient-to-r from-lavender/30 to-mint/10 border-b border-gray-100">
+      <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-lavender/30 to-mint/10 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{RELATIONSHIP_EMOJI[relationshipType]}</span>
-            <span className="text-base font-semibold text-gray-700">
+            <span className="text-xl sm:text-2xl">{RELATIONSHIP_EMOJI[relationshipType]}</span>
+            <span className="text-sm sm:text-base font-semibold text-gray-700">
               {RELATIONSHIP_LABELS[relationshipType]}
             </span>
           </div>
@@ -66,8 +66,8 @@ export default function CareActionsPanel({
       </div>
 
       {/* Suggested Templates */}
-      <div className="p-5">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+      <div className="p-4 sm:p-5">
+        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 sm:mb-4">
           ✨ Suggested Actions
         </h3>
 
@@ -76,16 +76,16 @@ export default function CareActionsPanel({
             <button
               key={template.id}
               onClick={() => handleTemplateClick(template)}
-              className="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-lavender hover:bg-lavender/10 transition-all group hover:scale-[1.01]"
+              className="w-full text-left p-3 sm:p-4 rounded-xl border-2 border-gray-100 hover:border-lavender hover:bg-lavender/10 transition-all group hover:scale-[1.01]"
             >
-              <div className="flex items-start gap-3">
-                <span className="text-xl flex-shrink-0">{template.emoji}</span>
+              <div className="flex items-start gap-2 sm:gap-3">
+                <span className="text-lg sm:text-xl flex-shrink-0">{template.emoji}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">
+                  <div className="flex items-center justify-between gap-1 sm:gap-2">
+                    <span className="text-xs sm:text-sm font-semibold text-gray-700 group-hover:text-gray-900">
                       {template.label}
                     </span>
-                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full flex-shrink-0 group-hover:bg-lavender/20">
+                    <span className="text-[10px] sm:text-xs text-gray-400 bg-gray-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full flex-shrink-0 group-hover:bg-lavender/20">
                       {getRecurrenceLabel(template.recurrence)}
                     </span>
                   </div>

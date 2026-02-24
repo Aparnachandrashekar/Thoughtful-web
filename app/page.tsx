@@ -270,12 +270,12 @@ export default function Home() {
       }
     }
 
-    const phoneNumber = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : null
+    const phoneNumber = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : undefined
     const message = friendlyTitle
     const triggerAt = date.getTime()
     const whatsappLink = phoneNumber
       ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
-      : null
+      : undefined
 
     const newReminder: Reminder = {
       id,
@@ -287,7 +287,7 @@ export default function Home() {
       isBirthday: recurrenceOptions?.isBirthday,
       isAnniversary: recurrenceOptions?.isAnniversary,
       message,
-      personName: detectedPersonName || null,
+      personName: detectedPersonName || undefined,
       phoneNumber,
       whatsappLink,
       triggerAt,

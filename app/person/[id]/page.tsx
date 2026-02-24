@@ -12,7 +12,7 @@ import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from 
 import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore } from '@/lib/db'
-import { parseReminderInput } from '@/lib/parser'
+import { parseReminder } from '@/lib/parser'
 
 function getCardColor(index: number): string {
   const colors = ['bg-blush/60', 'bg-lavender/60', 'bg-mint/60', 'bg-peach/60', 'bg-sky/60']
@@ -141,7 +141,7 @@ export default function PersonProfilePage() {
 
     setAddingReminder(true)
     try {
-      const parsed = parseReminderInput(newReminderText.trim())
+      const parsed = parseReminder(newReminderText.trim())
       const dateTime = parsed.date || new Date()
 
       let friendlyTitle: string
@@ -152,12 +152,12 @@ export default function PersonProfilePage() {
       }
 
       const id = Date.now().toString()
-      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : null
+      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
       const message = friendlyTitle
       const triggerAt = dateTime.getTime()
       const whatsappLink = phoneNumber
         ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
-        : null
+        : undefined
 
       const newReminder: Reminder = {
         id,
@@ -266,12 +266,12 @@ export default function PersonProfilePage() {
       const friendlyTitle = await generateTitle(data.reminderText)
 
       const id = Date.now().toString()
-      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : null
+      const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
       const message = friendlyTitle
       const triggerAt = dateTime.getTime()
       const whatsappLink = phoneNumber
         ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
-        : null
+        : undefined
 
       const newReminder: Reminder = {
         id,

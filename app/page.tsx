@@ -649,6 +649,7 @@ export default function Home() {
             {/* Reminder List */}
             <ReminderList
               reminders={reminders}
+              people={people}
               onToggle={handleToggle}
               onDelete={handleDelete}
             />

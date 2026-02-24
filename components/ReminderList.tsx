@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Person } from '@/lib/types'
 
 export interface Reminder {
   id: string
@@ -23,6 +24,7 @@ export interface Reminder {
 
 interface ReminderListProps {
   reminders: Reminder[]
+  people?: Person[]
   onToggle: (id: string) => void
   onDelete: (id: string) => void
 }
@@ -56,7 +58,20 @@ function getCardColor(index: number): string {
   return colors[index % colors.length]
 }
 
-export default function ReminderList({ reminders, onToggle, onDelete }: ReminderListProps) {
+// Find phone number for a reminder by checking the reminder's stored phone,
+// then looking up the linked person by name in the people list
+function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
+  if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
+  if (!people || !reminder.personName) return ''
+  const person = people.find(p => p.name.toLowerCase() === reminder.personName!.toLowerCase())
+  if (person?.phone) return person.phone.replace(/[^0-9]/g, '')
+  // Also check if the reminder text mentions a person's name
+  const matched = people.find(p => p.phone && reminder.text.toLowerCase().includes(p.name.toLowerCase()))
+  if (matched?.phone) return matched.phone.replace(/[^0-9]/g, '')
+  return ''
+}
+
+export default function ReminderList({ reminders, people, onToggle, onDelete }: ReminderListProps) {
   const [showCompleted, setShowCompleted] = useState(true)
 
   if (reminders.length === 0) {
@@ -115,9 +130,8 @@ export default function ReminderList({ reminders, onToggle, onDelete }: Reminder
                   <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                     <button
                       onClick={() => {
-                        const phone = reminder.phoneNumber ? reminder.phoneNumber.replace(/[^0-9]/g, '') : ''
-                        const msg = 'Hey!'
-                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+                        const phone = findPhoneForReminder(reminder, people)
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent('Hey!')}`, '_blank')
                       }}
                       className="text-gray-400 hover:text-green-600 p-1.5 sm:p-2 hover:bg-white/50 rounded-xl transition-all"
                       title="Send via WhatsApp"

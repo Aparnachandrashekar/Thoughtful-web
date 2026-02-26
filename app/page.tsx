@@ -106,7 +106,7 @@ export default function Home() {
   // Track whether reminders have been loaded (prevents saving [] on mount)
   const remindersLoaded = useRef(false)
 
-  // Rate-limit GCal change polling: at most once every 5 minutes
+  // Rate-limit GCal change polling: at most once every 30 seconds (reset on tab hide)
   const lastGcalCheck = useRef<number>(0)
 
   // Save reminders for current user
@@ -171,13 +171,13 @@ export default function Home() {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
 
-  // Check Google Calendar for changes to synced reminders (called on window focus / visibility change)
+  // Check Google Calendar for changes to synced reminders (called on tab becoming visible)
   const checkForCalendarChanges = useCallback(async () => {
     if (!isSignedIn() || !userEmail) return
 
-    // Rate-limit: at most once per 1 minute
+    // Debounce: skip if already ran in last 30 seconds
     const now = Date.now()
-    if (now - lastGcalCheck.current < 60 * 1000) return
+    if (now - lastGcalCheck.current < 30 * 1000) return
     lastGcalCheck.current = now
 
     const key = getRemindersKey()
@@ -185,7 +185,7 @@ export default function Home() {
     if (!saved) return
     let allReminders: Reminder[]
     try {
-      allReminders = JSON.parse(saved).map((r: Reminder) => ({ ...r, date: new Date(r.date) }))
+      allReminders = JSON.parse(saved).map((r: any) => ({ ...r, date: new Date(r.date) }))
     } catch {
       return
     }
@@ -194,8 +194,11 @@ export default function Home() {
       r.calendarEventId && !r.isCompleted && r.date >= new Date()
     )
 
-    const updated = [...allReminders]
+    if (upcoming.length === 0) return
+
+    const updatedMap = new Map(allReminders.map(r => [r.id, { ...r }]))
     const newUpdates: Array<{ id: string; text: string; change: string }> = []
+    let hasChanges = false
 
     for (const reminder of upcoming) {
       try {
@@ -203,44 +206,44 @@ export default function Home() {
         const calStart = new Date(event.start?.dateTime || event.start?.date)
         const timeDiff = Math.abs(calStart.getTime() - reminder.date.getTime())
         const timeChanged = timeDiff > 60000
-        const titleChanged = event.summary && event.summary !== reminder.text
-        const linkMissing = !reminder.calendarHtmlLink && event.htmlLink
+        const titleChanged = !!(event.summary && event.summary !== reminder.text)
+        const linkMissing = !reminder.calendarHtmlLink && !!event.htmlLink
 
         if (timeChanged || titleChanged || linkMissing) {
-          const idx = updated.findIndex(r => r.id === reminder.id)
-          if (idx >= 0) {
-            updated[idx] = {
-              ...updated[idx],
-              date: timeChanged ? calStart : updated[idx].date,
-              text: titleChanged ? event.summary : updated[idx].text,
-              calendarHtmlLink: event.htmlLink || updated[idx].calendarHtmlLink,
-              lastSyncedAt: now,
-              originalStartTime: event.start?.dateTime,
-            }
-          }
-
-          if (timeChanged || titleChanged) {
-            const changeDesc = timeChanged && titleChanged
-              ? `Renamed to "${event.summary}" and rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-              : timeChanged
-              ? `Rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-              : `Renamed to "${event.summary}"`
-            newUpdates.push({ id: reminder.id, text: reminder.text, change: changeDesc })
-          }
+          const current = updatedMap.get(reminder.id)!
+          updatedMap.set(reminder.id, {
+            ...current,
+            date: timeChanged ? calStart : current.date,
+            text: titleChanged ? event.summary : current.text,
+            calendarHtmlLink: event.htmlLink || current.calendarHtmlLink,
+            lastSyncedAt: now,
+            originalStartTime: event.start?.dateTime,
+          })
+          hasChanges = true
         }
-      } catch {
-        // Event may have been deleted from GCal or token expired — skip silently
+
+        if (timeChanged || titleChanged) {
+          const changeDesc = timeChanged && titleChanged
+            ? `Renamed to "${event.summary}" and rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+            : timeChanged
+            ? `Rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+            : `Renamed to "${event.summary}"`
+          newUpdates.push({ id: reminder.id, text: reminder.text, change: changeDesc })
+        }
+      } catch (e) {
+        console.error('GCal sync: failed to fetch event', reminder.calendarEventId, e)
       }
     }
 
-    const hasChanges = updated.some((r, i) => r.lastSyncedAt === now && allReminders[i]?.lastSyncedAt !== now)
-    if (hasChanges || newUpdates.length > 0) {
+    if (hasChanges) {
+      const updated = allReminders.map(r => updatedMap.get(r.id) || r)
       localStorage.setItem(key, JSON.stringify(updated))
       setReminders(updated.map(r => ({ ...r, date: new Date(r.date) })))
-      for (const r of updated) {
-        if (r.lastSyncedAt === now) syncReminderToFirestore(userEmail, r)
-      }
+      updated.forEach(r => {
+        if ((r as any).lastSyncedAt === now) syncReminderToFirestore(userEmail, r)
+      })
     }
+
     if (newUpdates.length > 0) {
       setGcalUpdates(prev => {
         const existingIds = new Set(prev.map(u => u.id))
@@ -251,7 +254,13 @@ export default function Home() {
 
   // Listen for window focus and tab visibility to check for Google Calendar changes
   useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === 'visible') checkForCalendarChanges() }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastGcalCheck.current = 0  // reset so returning always triggers a fresh check
+      } else if (document.visibilityState === 'visible') {
+        checkForCalendarChanges()
+      }
+    }
     window.addEventListener('focus', checkForCalendarChanges)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {

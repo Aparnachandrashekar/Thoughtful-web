@@ -542,7 +542,7 @@ export default function PersonProfilePage() {
                       type="tel"
                       value={editingPhone}
                       onChange={(e) => setEditingPhone(e.target.value)}
-                      placeholder="+1234567890"
+                      placeholder="919962593404 (no spaces or + symbol)"
                       className="text-sm px-3 sm:px-4 py-2 border-2 border-green-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none w-full sm:w-44"
                       autoFocus
                     />

@@ -723,8 +723,8 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Profiles Sidebar */}
+    <div className="min-h-screen">
+      {/* Profiles Sidebar — always overlay, never pushes content */}
       {signedIn && (
         <RelationshipsSidebar
           people={people}
@@ -735,15 +735,15 @@ export default function Home() {
         />
       )}
 
-      <main className="flex-1 px-5 sm:px-8 md:px-14 py-8 sm:py-10 md:py-14 min-w-0">
+      <main className="px-5 sm:px-8 md:px-14 py-8 sm:py-10 md:py-14">
         <div className="max-w-2xl mx-auto">
 
-          {/* Top bar: hamburger (mobile) + sign-in */}
+          {/* Top bar: hamburger (all sizes when signed in) + sign-in */}
           <div className="flex items-center justify-between mb-8 sm:mb-10 animate-fade-in">
             {signedIn ? (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="md:hidden text-terra hover:text-terra-deep transition-colors p-1 -ml-1"
+                className="text-terra hover:text-terra-deep transition-colors p-1 -ml-1"
                 aria-label="Open profiles"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -792,7 +792,7 @@ export default function Home() {
             <h1 className="font-script text-6xl sm:text-7xl md:text-8xl text-terra leading-none select-none">
               Thoughtful
             </h1>
-            <p className="mt-4 text-terra/55 text-sm sm:text-base font-light tracking-wide">
+            <p className="mt-8 sm:mt-10 text-terra/55 text-sm sm:text-base font-light tracking-wide">
               An easy way to remember things that matter
             </p>
           </div>

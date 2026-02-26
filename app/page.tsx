@@ -66,6 +66,7 @@ export default function Home() {
   const [calendarConnected, setCalendarConnected] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [gcalUpdates, setGcalUpdates] = useState<Array<{ id: string; text: string; change: string }>>([])
 
   // For date picker fallback
   const [pendingText, setPendingText] = useState<string | null>(null)
@@ -170,13 +171,13 @@ export default function Home() {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
 
-  // Check Google Calendar for changes to synced reminders (called on window focus)
+  // Check Google Calendar for changes to synced reminders (called on window focus / visibility change)
   const checkForCalendarChanges = useCallback(async () => {
     if (!isSignedIn() || !userEmail) return
 
-    // Rate-limit: at most once per 5 minutes
+    // Rate-limit: at most once per 1 minute
     const now = Date.now()
-    if (now - lastGcalCheck.current < 5 * 60 * 1000) return
+    if (now - lastGcalCheck.current < 60 * 1000) return
     lastGcalCheck.current = now
 
     const key = getRemindersKey()
@@ -193,29 +194,38 @@ export default function Home() {
       r.calendarEventId && !r.isCompleted && r.date >= new Date()
     )
 
-    let hasChanges = false
     const updated = [...allReminders]
+    const newUpdates: Array<{ id: string; text: string; change: string }> = []
 
     for (const reminder of upcoming) {
       try {
         const event = await getCalendarEvent(reminder.calendarEventId!)
         const calStart = new Date(event.start?.dateTime || event.start?.date)
         const timeDiff = Math.abs(calStart.getTime() - reminder.date.getTime())
+        const timeChanged = timeDiff > 60000
         const titleChanged = event.summary && event.summary !== reminder.text
         const linkMissing = !reminder.calendarHtmlLink && event.htmlLink
 
-        if (timeDiff > 60000 || titleChanged || linkMissing) {
+        if (timeChanged || titleChanged || linkMissing) {
           const idx = updated.findIndex(r => r.id === reminder.id)
           if (idx >= 0) {
             updated[idx] = {
               ...updated[idx],
-              date: timeDiff > 60000 ? calStart : updated[idx].date,
+              date: timeChanged ? calStart : updated[idx].date,
               text: titleChanged ? event.summary : updated[idx].text,
               calendarHtmlLink: event.htmlLink || updated[idx].calendarHtmlLink,
               lastSyncedAt: now,
               originalStartTime: event.start?.dateTime,
             }
-            hasChanges = true
+          }
+
+          if (timeChanged || titleChanged) {
+            const changeDesc = timeChanged && titleChanged
+              ? `Renamed to "${event.summary}" and rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+              : timeChanged
+              ? `Rescheduled to ${calStart.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+              : `Renamed to "${event.summary}"`
+            newUpdates.push({ id: reminder.id, text: reminder.text, change: changeDesc })
           }
         }
       } catch {
@@ -223,23 +233,31 @@ export default function Home() {
       }
     }
 
-    if (hasChanges) {
+    const hasChanges = updated.some((r, i) => r.lastSyncedAt === now && allReminders[i]?.lastSyncedAt !== now)
+    if (hasChanges || newUpdates.length > 0) {
       localStorage.setItem(key, JSON.stringify(updated))
       setReminders(updated.map(r => ({ ...r, date: new Date(r.date) })))
       for (const r of updated) {
-        if (r.lastSyncedAt === now) {
-          syncReminderToFirestore(userEmail, r)
-        }
+        if (r.lastSyncedAt === now) syncReminderToFirestore(userEmail, r)
       }
-      setStatus('Some events were updated in Google Calendar')
-      setTimeout(() => setStatus(null), 4000)
+    }
+    if (newUpdates.length > 0) {
+      setGcalUpdates(prev => {
+        const existingIds = new Set(prev.map(u => u.id))
+        return [...prev, ...newUpdates.filter(u => !existingIds.has(u.id))]
+      })
     }
   }, [userEmail])
 
-  // Listen for window focus to check for Google Calendar changes
+  // Listen for window focus and tab visibility to check for Google Calendar changes
   useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === 'visible') checkForCalendarChanges() }
     window.addEventListener('focus', checkForCalendarChanges)
-    return () => window.removeEventListener('focus', checkForCalendarChanges)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', checkForCalendarChanges)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [checkForCalendarChanges])
 
   // Handle person confirmation - create profile with default 'close_friend' type
@@ -763,6 +781,34 @@ export default function Home() {
                 Recurring: &quot;every Friday&quot;, &quot;alternating Mondays&quot;, &quot;last Saturday of the month&quot;
               </p>
             </div>
+
+            {/* Google Calendar update notifications */}
+            {gcalUpdates.length > 0 && (
+              <div className="mb-6 space-y-2 animate-fade-in">
+                {gcalUpdates.map(update => (
+                  <div
+                    key={update.id}
+                    className="flex items-start gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-2xl"
+                  >
+                    <svg className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="flex-1 text-sm text-orange-800">
+                      <span className="font-semibold">Google Calendar update:</span> &quot;{update.text}&quot; — {update.change}
+                    </p>
+                    <button
+                      onClick={() => setGcalUpdates(prev => prev.filter(u => u.id !== update.id))}
+                      className="text-orange-400 hover:text-orange-600 flex-shrink-0"
+                      aria-label="Dismiss"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Reminder List */}
             <ReminderList

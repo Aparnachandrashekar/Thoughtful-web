@@ -325,6 +325,25 @@ export async function updateCalendarEvent(eventId: string, event: {
   return res.json()
 }
 
+export async function getCalendarEvent(eventId: string): Promise<any> {
+  if (!accessToken) throw new Error('Not signed in')
+
+  const res = await fetchWithTimeout(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  )
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error?.message || `Calendar get failed (${res.status})`)
+  }
+
+  return res.json()
+}
+
 export async function deleteCalendarEvent(eventId: string) {
   if (!accessToken) return
 

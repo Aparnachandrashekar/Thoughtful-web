@@ -18,6 +18,7 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  getCalendarEvent,
   RecurrenceOptions,
   getStoredEmail
 } from '@/lib/google'
@@ -62,6 +63,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
+  const [calendarConnected, setCalendarConnected] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
@@ -103,6 +105,9 @@ export default function Home() {
   // Track whether reminders have been loaded (prevents saving [] on mount)
   const remindersLoaded = useRef(false)
 
+  // Rate-limit GCal change polling: at most once every 5 minutes
+  const lastGcalCheck = useRef<number>(0)
+
   // Save reminders for current user
   const saveReminders = useCallback((newReminders: Reminder[]) => {
     const key = getRemindersKey()
@@ -130,8 +135,10 @@ export default function Home() {
         if (clientId) {
           initGoogleAuth(clientId)
           setGoogleReady(true)
+          const tokenValid = isSignedIn()
+          setCalendarConnected(tokenValid)
           // If we have a valid token, ensure state is set
-          if (isSignedIn() && !storedEmail) {
+          if (tokenValid && !storedEmail) {
             setSignedIn(true)
             setUserEmail(getUserEmail())
           }
@@ -162,6 +169,77 @@ export default function Home() {
   const refreshPeople = useCallback(() => {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
+
+  // Check Google Calendar for changes to synced reminders (called on window focus)
+  const checkForCalendarChanges = useCallback(async () => {
+    if (!isSignedIn() || !userEmail) return
+
+    // Rate-limit: at most once per 5 minutes
+    const now = Date.now()
+    if (now - lastGcalCheck.current < 5 * 60 * 1000) return
+    lastGcalCheck.current = now
+
+    const key = getRemindersKey()
+    const saved = localStorage.getItem(key)
+    if (!saved) return
+    let allReminders: Reminder[]
+    try {
+      allReminders = JSON.parse(saved).map((r: Reminder) => ({ ...r, date: new Date(r.date) }))
+    } catch {
+      return
+    }
+
+    const upcoming = allReminders.filter(r =>
+      r.calendarEventId && !r.isCompleted && r.date >= new Date()
+    )
+
+    let hasChanges = false
+    const updated = [...allReminders]
+
+    for (const reminder of upcoming) {
+      try {
+        const event = await getCalendarEvent(reminder.calendarEventId!)
+        const calStart = new Date(event.start?.dateTime || event.start?.date)
+        const timeDiff = Math.abs(calStart.getTime() - reminder.date.getTime())
+        const titleChanged = event.summary && event.summary !== reminder.text
+
+        if (timeDiff > 60000 || titleChanged) {
+          const idx = updated.findIndex(r => r.id === reminder.id)
+          if (idx >= 0) {
+            updated[idx] = {
+              ...updated[idx],
+              date: timeDiff > 60000 ? calStart : updated[idx].date,
+              text: titleChanged ? event.summary : updated[idx].text,
+              calendarHtmlLink: event.htmlLink || updated[idx].calendarHtmlLink,
+              lastSyncedAt: now,
+              originalStartTime: event.start?.dateTime,
+            }
+            hasChanges = true
+          }
+        }
+      } catch {
+        // Event may have been deleted from GCal or token expired — skip silently
+      }
+    }
+
+    if (hasChanges) {
+      localStorage.setItem(key, JSON.stringify(updated))
+      setReminders(updated.map(r => ({ ...r, date: new Date(r.date) })))
+      for (const r of updated) {
+        if (r.lastSyncedAt === now) {
+          syncReminderToFirestore(userEmail, r)
+        }
+      }
+      setStatus('Some events were updated in Google Calendar')
+      setTimeout(() => setStatus(null), 4000)
+    }
+  }, [userEmail])
+
+  // Listen for window focus to check for Google Calendar changes
+  useEffect(() => {
+    window.addEventListener('focus', checkForCalendarChanges)
+    return () => window.removeEventListener('focus', checkForCalendarChanges)
+  }, [checkForCalendarChanges])
 
   // Handle person confirmation - create profile with default 'close_friend' type
   // User can edit relationship type later from profile page
@@ -229,6 +307,7 @@ export default function Home() {
   const handleGoogleSignIn = () => {
     signIn((email) => {
       setSignedIn(true)
+      setCalendarConnected(true)
       setUserEmail(email)
       setStatus(`Signed in as ${email}`)
       setTimeout(() => setStatus(null), 2000)
@@ -239,6 +318,7 @@ export default function Home() {
     stopReminderEngine()
     signOut()
     setSignedIn(false)
+    setCalendarConnected(false)
     setUserEmail(null)
     setReminders([])
     setStatus('Signed out')
@@ -306,6 +386,9 @@ export default function Home() {
       date,
       isCompleted: false,
       calendarEventId: existingReminder?.calendarEventId,
+      calendarHtmlLink: existingReminder?.calendarHtmlLink,
+      lastSyncedAt: existingReminder?.lastSyncedAt,
+      originalStartTime: existingReminder?.originalStartTime,
       isRecurring: !!recurrenceOptions?.type,
       isBirthday: recurrenceOptions?.isBirthday,
       isAnniversary: recurrenceOptions?.isAnniversary,
@@ -345,7 +428,13 @@ export default function Home() {
           })
           if (result?.id) {
             setReminders(prev => prev.map(r =>
-              r.id === id ? { ...r, calendarEventId: result.id } : r
+              r.id === id ? {
+                ...r,
+                calendarEventId: result.id,
+                calendarHtmlLink: result.htmlLink || undefined,
+                lastSyncedAt: Date.now(),
+                originalStartTime: result.start?.dateTime || undefined,
+              } : r
             ))
           }
           setStatus(`Updated and synced to calendar`)
@@ -359,10 +448,16 @@ export default function Home() {
             date: date.toISOString(),
             recurrence: recurrenceOptions
           })
-          // Store the calendar event ID
+          // Store the calendar event ID, html link, and sync metadata
           if (result?.id) {
             setReminders(prev => prev.map(r =>
-              r.id === id ? { ...r, calendarEventId: result.id } : r
+              r.id === id ? {
+                ...r,
+                calendarEventId: result.id,
+                calendarHtmlLink: result.htmlLink || undefined,
+                lastSyncedAt: Date.now(),
+                originalStartTime: result.start?.dateTime || undefined,
+              } : r
             ))
           }
           const successMsg = recurrenceOptions?.isBirthday
@@ -615,6 +710,18 @@ export default function Home() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Sign in with Google
+            </button>
+          ) : googleReady && signedIn && !calendarConnected ? (
+            <button
+              onClick={handleGoogleSignIn}
+              className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-orange-200
+                         rounded-2xl text-sm font-semibold text-orange-600 hover:border-orange-300
+                         hover:shadow-md transition-all duration-200 active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reconnect Google Calendar
             </button>
           ) : null}
         </div>

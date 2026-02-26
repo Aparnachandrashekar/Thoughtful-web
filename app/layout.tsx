@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
+import { PostHogProvider } from '@/components/PostHogProvider'
 
 export const metadata: Metadata = {
   title: 'Thoughtful',
@@ -31,8 +32,10 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="min-h-screen bg-cream antialiased">
-        {children}
-        <ServiceWorkerRegister />
+        <PostHogProvider>
+          {children}
+          <ServiceWorkerRegister />
+        </PostHogProvider>
       </body>
     </html>
   )

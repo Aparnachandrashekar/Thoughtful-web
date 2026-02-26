@@ -9,6 +9,9 @@ export interface Reminder {
   date: Date
   isCompleted: boolean
   calendarEventId?: string
+  calendarHtmlLink?: string   // Direct URL to open this event in Google Calendar
+  lastSyncedAt?: number       // Timestamp of last successful GCal sync
+  originalStartTime?: string  // ISO start time as of last GCal sync (change detection)
   isRecurring?: boolean
   isBirthday?: boolean
   isAnniversary?: boolean
@@ -139,6 +142,19 @@ export default function ReminderList({ reminders, people, onToggle, onDelete }: 
                     <p className="text-sm sm:text-base text-gray-600 mt-1.5 sm:mt-2">{formatDate(reminder.date)}</p>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                    {reminder.calendarHtmlLink && (
+                      <a
+                        href={reminder.calendarHtmlLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-blue-500 p-1.5 sm:p-2 hover:bg-white/50 rounded-xl transition-all"
+                        title="Open in Google Calendar"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </a>
+                    )}
                     <button
                       onClick={() => {
                         const phone = findPhoneForReminder(reminder, people)
@@ -172,7 +188,7 @@ export default function ReminderList({ reminders, people, onToggle, onDelete }: 
         <div className="mt-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-              Completed ({completed.length})
+              History ({completed.length})
             </h2>
             <div className="flex items-center gap-2">
               <button
@@ -203,7 +219,7 @@ export default function ReminderList({ reminders, people, onToggle, onDelete }: 
                     <div className="flex-1 min-w-0">
                       <p className="text-gray-500 line-through text-sm sm:text-base">{reminder.text}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {reminder.date < now && !reminder.isCompleted ? 'Auto-completed' : 'Done'}
+                        {reminder.date < now && !reminder.isCompleted ? 'Past' : 'Completed'}
                       </p>
                     </div>
                     <button

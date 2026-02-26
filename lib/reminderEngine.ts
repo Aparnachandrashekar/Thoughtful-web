@@ -26,10 +26,16 @@ async function requestNotificationPermission(): Promise<boolean> {
 }
 
 // Show notification for a due reminder
-function showNotification(reminder: { id: string; message?: string; text?: string; whatsappLink?: string }) {
-  const body = reminder.message || reminder.text || 'You have a reminder'
+function showNotification(reminder: { id: string; message?: string; text?: string; whatsappLink?: string; personName?: string }) {
+  const title = reminder.message || reminder.text || 'You have a reminder'
 
-  const notification = new Notification('Thoughtful Reminder', {
+  const body = reminder.whatsappLink && reminder.personName
+    ? `Click here to reach out to ${reminder.personName} on WhatsApp for ${title}`
+    : reminder.whatsappLink
+    ? `Click here to send a WhatsApp message for ${title}`
+    : title
+
+  const notification = new Notification('Thoughtful', {
     body,
     icon: '/favicon.ico',
     tag: `reminder-${reminder.id}`, // prevents duplicate notifications for same reminder

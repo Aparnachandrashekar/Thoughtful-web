@@ -202,8 +202,9 @@ export default function Home() {
         const calStart = new Date(event.start?.dateTime || event.start?.date)
         const timeDiff = Math.abs(calStart.getTime() - reminder.date.getTime())
         const titleChanged = event.summary && event.summary !== reminder.text
+        const linkMissing = !reminder.calendarHtmlLink && event.htmlLink
 
-        if (timeDiff > 60000 || titleChanged) {
+        if (timeDiff > 60000 || titleChanged || linkMissing) {
           const idx = updated.findIndex(r => r.id === reminder.id)
           if (idx >= 0) {
             updated[idx] = {
@@ -450,15 +451,25 @@ export default function Home() {
           })
           // Store the calendar event ID, html link, and sync metadata
           if (result?.id) {
-            setReminders(prev => prev.map(r =>
-              r.id === id ? {
-                ...r,
-                calendarEventId: result.id,
-                calendarHtmlLink: result.htmlLink || undefined,
-                lastSyncedAt: Date.now(),
-                originalStartTime: result.start?.dateTime || undefined,
-              } : r
-            ))
+            const calFields = {
+              calendarEventId: result.id,
+              calendarHtmlLink: result.htmlLink || undefined,
+              lastSyncedAt: Date.now(),
+              originalStartTime: result.start?.dateTime || undefined,
+            }
+            // Write directly to localStorage immediately (don't rely on useEffect timing)
+            const key = getRemindersKey()
+            const saved = localStorage.getItem(key)
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved)
+                const updated = parsed.map((r: any) => r.id === id ? { ...r, ...calFields } : r)
+                localStorage.setItem(key, JSON.stringify(updated))
+                const updatedReminder = updated.find((r: any) => r.id === id)
+                if (updatedReminder && userEmail) syncReminderToFirestore(userEmail, updatedReminder)
+              } catch {}
+            }
+            setReminders(prev => prev.map(r => r.id === id ? { ...r, ...calFields } : r))
           }
           const successMsg = recurrenceOptions?.isBirthday
             ? 'Birthday reminder created (yearly, with 1-day advance notice)'

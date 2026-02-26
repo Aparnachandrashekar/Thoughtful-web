@@ -82,6 +82,19 @@ export function signIn(callback?: (email: string) => void) {
   tokenClient.requestAccessToken()
 }
 
+// Silently refresh an expired token without showing a consent popup.
+// Calls onRefresh() if successful, does nothing if the browser has no active Google session.
+export function tryRefreshToken(onRefresh: () => void): void {
+  if (!tokenClient) return
+  const prevOnSignIn = onSignIn
+  onSignIn = () => {
+    onSignIn = prevOnSignIn  // restore any existing handler
+    onRefresh()
+  }
+  // prompt: '' = silent (no consent screen). Works as long as user is logged into Google in the browser.
+  tokenClient.requestAccessToken({ prompt: '' })
+}
+
 export function signOut() {
   accessToken = null
   userEmail = null

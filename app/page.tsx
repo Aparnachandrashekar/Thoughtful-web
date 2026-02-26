@@ -13,6 +13,7 @@ import {
   signIn,
   signOut,
   isSignedIn,
+  tryRefreshToken,
   getUserEmail,
   getRemindersKey,
   createCalendarEvent,
@@ -352,6 +353,15 @@ export default function Home() {
     setStatus('Signed out')
     setTimeout(() => setStatus(null), 2000)
   }
+
+  // Auto-refresh expired token silently — runs whenever calendarConnected drops to false
+  // while the user is still signed in (email present). Uses prompt:'' so no popup appears.
+  useEffect(() => {
+    if (!signedIn || calendarConnected || !googleReady) return
+    tryRefreshToken(() => {
+      setCalendarConnected(true)
+    })
+  }, [signedIn, calendarConnected, googleReady])
 
   const addReminderWithDate = useCallback(async (
     rawText: string,  // Original user input for AI title generation

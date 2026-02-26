@@ -134,6 +134,24 @@ export async function getDueReminders(email: string): Promise<Array<{ id: string
   }
 }
 
+export async function getPeopleForUser(email: string): Promise<Array<{ id: string; name: string; phone?: string; linkedReminderIds: string[] }>> {
+  try {
+    const snap = await getDocs(query(peopleCol(email)))
+    return snap.docs.map(d => {
+      const data = d.data()
+      return {
+        id: d.id,
+        name: data.name || '',
+        phone: data.phone || undefined,
+        linkedReminderIds: Array.isArray(data.linkedReminderIds) ? data.linkedReminderIds : [],
+      }
+    })
+  } catch (e) {
+    console.error('Firestore: failed to fetch people:', e)
+    return []
+  }
+}
+
 export async function markReminderTriggered(email: string, reminderId: string): Promise<void> {
   try {
     const ref = doc(remindersCol(email), reminderId)

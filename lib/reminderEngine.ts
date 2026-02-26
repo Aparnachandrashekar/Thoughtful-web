@@ -2,7 +2,7 @@
 // Checks Firestore every 60s for due reminders, shows browser notifications,
 // and opens WhatsApp link on click.
 
-import { getDueReminders, markReminderTriggered } from './db'
+import { getDueReminders, getPeopleForUser, markReminderTriggered } from './db'
 
 let intervalId: ReturnType<typeof setInterval> | null = null
 let currentEmail: string | null = null
@@ -51,6 +51,28 @@ function showNotification(reminder: { id: string; message?: string; text?: strin
   }
 }
 
+// Look up a phone number for a reminder from the people list
+function findPhone(reminder: { id: string; personName?: string; text?: string }, people: Array<{ id: string; name: string; phone?: string; linkedReminderIds: string[] }>): string {
+  if (!people.length) return ''
+
+  // 1. Person who has this reminder in their linkedReminderIds
+  const linked = people.find(p => p.phone && p.linkedReminderIds.includes(reminder.id))
+  if (linked?.phone) return linked.phone.replace(/[^0-9]/g, '')
+
+  // 2. Match by personName stored on the reminder
+  if (reminder.personName) {
+    const named = people.find(p => p.phone && p.name.toLowerCase() === reminder.personName!.toLowerCase())
+    if (named?.phone) return named.phone.replace(/[^0-9]/g, '')
+  }
+
+  // 3. Check if reminder text mentions any person's name
+  const textLower = (reminder.text || '').toLowerCase()
+  const textMatch = people.find(p => p.phone && textLower.includes(p.name.toLowerCase()))
+  if (textMatch?.phone) return textMatch.phone.replace(/[^0-9]/g, '')
+
+  return ''
+}
+
 // Check for due reminders and trigger them
 async function checkDueReminders() {
   if (!currentEmail) return
@@ -60,15 +82,36 @@ async function checkDueReminders() {
   try {
     const dueReminders = await getDueReminders(currentEmail)
 
-    if (dueReminders.length > 0) {
-      console.log(`ReminderEngine: ${dueReminders.length} due reminder(s) found`)
-    } else {
+    if (dueReminders.length === 0) {
       console.log('ReminderEngine: no due reminders')
+      return
     }
 
+    console.log(`ReminderEngine: ${dueReminders.length} due reminder(s) found`)
+
+    // Fetch people once to enrich reminders that are missing a whatsappLink
+    const anyMissingLink = dueReminders.some(r => !r.whatsappLink)
+    const people = anyMissingLink ? await getPeopleForUser(currentEmail) : []
+
     for (const reminder of dueReminders) {
-      console.log('ReminderEngine: triggering reminder:', reminder.message, '| triggerAt:', reminder.triggerAt, '| whatsappLink:', reminder.whatsappLink)
-      showNotification(reminder)
+      // Enrich with whatsappLink if not already stored
+      let whatsappLink = reminder.whatsappLink || undefined
+      let personName = reminder.personName || undefined
+      if (!whatsappLink) {
+        const phone = findPhone(reminder, people)
+        if (phone) {
+          whatsappLink = `https://wa.me/${phone}?text=${encodeURIComponent('Hey!')}`
+          // Also pick up personName from people list if not on reminder
+          if (!personName) {
+            const match = people.find(p => p.linkedReminderIds.includes(reminder.id))
+            personName = match?.name
+          }
+        }
+      }
+
+      const enriched: { id: string; [key: string]: any } = { ...reminder, whatsappLink, personName }
+      console.log('ReminderEngine: triggering reminder:', enriched.message, '| triggerAt:', enriched.triggerAt, '| whatsappLink:', enriched.whatsappLink)
+      showNotification(enriched)
       await markReminderTriggered(currentEmail, reminder.id)
     }
   } catch (e) {

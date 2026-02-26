@@ -104,23 +104,28 @@ export function signOut() {
 }
 
 export function isSignedIn(): boolean {
-  // Check in-memory token first, then localStorage
-  if (accessToken) return true
+  if (typeof window === 'undefined') return false
 
-  // Try to restore from localStorage if not in memory
-  if (typeof window !== 'undefined') {
-    const savedToken = localStorage.getItem(TOKEN_KEY)
-    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+  const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+  const expiryTime = savedExpiry ? parseInt(savedExpiry, 10) : 0
+  const notExpired = expiryTime > 0 && Date.now() < expiryTime
 
-    if (savedToken && savedExpiry) {
-      const expiryTime = parseInt(savedExpiry, 10)
-      if (Date.now() < expiryTime) {
-        // Restore token to memory
-        accessToken = savedToken
-        userEmail = localStorage.getItem(USER_EMAIL_KEY)
-        return true
-      }
-    }
+  // In-memory token — only valid if expiry also checks out
+  if (accessToken && notExpired) return true
+
+  // Try to restore from localStorage
+  const savedToken = localStorage.getItem(TOKEN_KEY)
+  if (savedToken && notExpired) {
+    accessToken = savedToken
+    userEmail = localStorage.getItem(USER_EMAIL_KEY)
+    return true
+  }
+
+  // Token expired — clear in-memory state so next call doesn't reuse it
+  if (accessToken) {
+    accessToken = null
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
   }
 
   return false

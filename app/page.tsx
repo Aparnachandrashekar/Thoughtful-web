@@ -174,7 +174,12 @@ export default function Home() {
 
   // Check Google Calendar for changes to synced reminders (called on tab becoming visible)
   const checkForCalendarChanges = useCallback(async () => {
-    if (!isSignedIn() || !userEmail) return
+    if (!userEmail) return
+    if (!isSignedIn()) {
+      // Token expired mid-session — trigger silent re-auth (the useEffect will call tryRefreshToken)
+      setCalendarConnected(false)
+      return
+    }
 
     // Debounce: skip if already ran in last 30 seconds
     const now = Date.now()

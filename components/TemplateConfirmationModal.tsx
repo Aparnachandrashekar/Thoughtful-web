@@ -71,72 +71,69 @@ export default function TemplateConfirmationModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-xl p-4 sm:p-6 max-w-md w-full mx-3 sm:mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-3xl shadow-xl p-6 max-w-md w-full mx-4 animate-scale-in
+                      max-h-[90vh] overflow-y-auto">
         <div className="space-y-5">
+
           {/* Header */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-lavender/20 rounded-full mb-3">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-blush-pale rounded-full mb-3">
               <span className="text-2xl">{template.emoji}</span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-800">
-              Create Reminder
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <h3 className="text-lg font-semibold text-[#2D1810]">Create Reminder</h3>
+            <p className="text-sm text-terra/50 mt-1 font-light">
               {template.label} for {personName}
             </p>
           </div>
 
-          {/* Reminder Preview */}
-          <div className="bg-lavender/10 rounded-xl p-4 space-y-3">
+          {/* Fields */}
+          <div className="bg-blush-pale/40 rounded-2xl p-4 space-y-3">
             <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">
                 Reminder
               </label>
               <input
                 type="text"
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
-                className="w-full mt-1 p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-lavender focus:ring-1 focus:ring-lavender outline-none text-sm"
+                className="w-full mt-1.5 px-3 py-2.5 bg-white border-2 border-blush-light
+                           focus:border-terra/40 rounded-xl outline-none text-sm text-[#2D1810] font-light"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Date
-                </label>
+                <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">Date</label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-lavender focus:ring-1 focus:ring-lavender outline-none text-sm"
+                  className="w-full mt-1.5 px-3 py-2.5 bg-white border-2 border-blush-light
+                             focus:border-terra/40 rounded-xl outline-none text-sm text-terra-deep"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Time
-                </label>
+                <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">Time</label>
                 <input
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-lavender focus:ring-1 focus:ring-lavender outline-none text-sm"
+                  className="w-full mt-1.5 px-3 py-2.5 bg-white border-2 border-blush-light
+                             focus:border-terra/40 rounded-xl outline-none text-sm text-terra-deep"
                 />
               </div>
             </div>
 
-            <p className="text-xs text-gray-500">
-              {formatDatePreview(date)}
-            </p>
+            <p className="text-xs text-terra/40 font-light">{formatDatePreview(date)}</p>
           </div>
 
-          {/* Recurrence Info */}
+          {/* Recurrence */}
           {template.recurrence && (
-            <div className="flex items-center gap-3 p-3 bg-mint/10 rounded-xl">
-              <span className="text-lg">🔄</span>
+            <div className="flex items-center gap-3 px-4 py-3 bg-blush-pale/40 rounded-2xl">
+              <span className="text-base">🔄</span>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <input
@@ -144,14 +141,14 @@ export default function TemplateConfirmationModal({
                     id="recurring"
                     checked={isRecurring}
                     onChange={(e) => setIsRecurring(e.target.checked)}
-                    className="w-4 h-4 text-lavender rounded border-gray-300 focus:ring-lavender"
+                    className="w-4 h-4 rounded accent-terra"
                   />
-                  <label htmlFor="recurring" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="recurring" className="text-sm font-medium text-[#2D1810]">
                     Repeat {getRecurrenceLabel(template.recurrence).toLowerCase()}
                   </label>
                 </div>
                 {isRecurring && (
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                  <p className="text-xs text-terra/45 mt-1 ml-6 font-light">
                     This reminder will automatically recur
                   </p>
                 )}
@@ -159,9 +156,9 @@ export default function TemplateConfirmationModal({
             </div>
           )}
 
-          {/* Google Meet Option */}
-          <div className="flex items-center gap-3 p-3 bg-sky/10 rounded-xl">
-            <span className="text-lg">📹</span>
+          {/* Google Meet */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-blush-pale/40 rounded-2xl">
+            <span className="text-base">📹</span>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <input
@@ -169,14 +166,14 @@ export default function TemplateConfirmationModal({
                   id="meetLink"
                   checked={addMeetLink}
                   onChange={(e) => setAddMeetLink(e.target.checked)}
-                  className="w-4 h-4 text-lavender rounded border-gray-300 focus:ring-lavender"
+                  className="w-4 h-4 rounded accent-terra"
                 />
-                <label htmlFor="meetLink" className="text-sm font-medium text-gray-700">
+                <label htmlFor="meetLink" className="text-sm font-medium text-[#2D1810]">
                   Add Google Meet link
                 </label>
               </div>
               {addMeetLink && (
-                <p className="text-xs text-gray-500 mt-1 ml-6">
+                <p className="text-xs text-terra/45 mt-1 ml-6 font-light">
                   {personEmail
                     ? `Invite will be sent to ${personEmail}`
                     : `Add ${personName}'s email to send invite`}
@@ -186,14 +183,14 @@ export default function TemplateConfirmationModal({
           </div>
 
           {/* Summary */}
-          <div className="text-center text-sm text-gray-500 py-2 border-t border-gray-100">
+          <div className="text-center text-xs text-terra/45 font-light py-1 border-t border-blush-light/60">
             {isRecurring ? (
               <p>
-                First reminder on <strong>{formatDatePreview(date)}</strong>,
+                First on <span className="font-medium text-terra-deep">{formatDatePreview(date)}</span>,
                 <br />then {getRecurrenceLabel(template.recurrence).toLowerCase()}
               </p>
             ) : (
-              <p>One-time reminder on <strong>{formatDatePreview(date)}</strong></p>
+              <p>One-time on <span className="font-medium text-terra-deep">{formatDatePreview(date)}</span></p>
             )}
           </div>
 
@@ -201,18 +198,22 @@ export default function TemplateConfirmationModal({
           <div className="flex gap-3">
             <button
               onClick={onCancel}
-              className="flex-1 py-2.5 px-4 border-2 border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 font-medium text-sm transition-all"
+              className="flex-1 py-3 px-4 bg-blush-pale text-terra/70 rounded-pill text-sm font-medium
+                         hover:bg-blush-light transition-all duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
               disabled={isLoading || !editedText.trim()}
-              className="flex-1 py-2.5 px-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-md disabled:opacity-50 disabled:bg-gray-400"
+              className="flex-1 py-3 px-4 bg-terra text-white rounded-pill text-sm font-medium
+                         hover:bg-terra-deep transition-all duration-200 active:scale-95
+                         disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Creating...' : 'Create Reminder'}
+              {isLoading ? 'Creating…' : 'Create Reminder'}
             </button>
           </div>
+
         </div>
       </div>
     </div>

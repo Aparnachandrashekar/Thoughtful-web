@@ -150,8 +150,7 @@ export default function ReminderList({ reminders, people, onToggle, onDelete }: 
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex items-center gap-0.5 flex-shrink-0
-                                  opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
                     {reminder.calendarHtmlLink && (
                       <a
                         href={reminder.calendarHtmlLink}

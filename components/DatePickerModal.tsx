@@ -24,34 +24,40 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up">
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">
+    <div className="fixed inset-0 z-50 flex items-center justify-center
+                    bg-black/30 backdrop-blur-[2px] animate-fade-in">
+      <div className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-sm mx-4 animate-scale-in">
+
+        <h3 className="text-lg font-semibold text-[#2D1810] mb-1">
           When should we remind you?
         </h3>
-        <p className="text-sm text-gray-500 mb-5 line-clamp-2">
+        <p className="text-sm text-terra/50 mb-5 line-clamp-2 font-light">
           &ldquo;{text}&rdquo;
         </p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Date</label>
+            <label className="block text-xs font-medium text-terra/45 uppercase tracking-[0.12em] mb-1.5">
+              Date
+            </label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-lavender/50 rounded-xl
-                         focus:border-lavender focus:outline-none text-gray-800"
+              className="w-full px-4 py-3 border-2 border-blush-light
+                         focus:border-terra/40 rounded-xl outline-none text-terra-deep text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Time</label>
+            <label className="block text-xs font-medium text-terra/45 uppercase tracking-[0.12em] mb-1.5">
+              Time
+            </label>
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-lavender/50 rounded-xl
-                         focus:border-lavender focus:outline-none text-gray-800"
+              className="w-full px-4 py-3 border-2 border-blush-light
+                         focus:border-terra/40 rounded-xl outline-none text-terra-deep text-sm"
             />
           </div>
         </div>
@@ -59,19 +65,21 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
         <div className="flex gap-3 mt-6">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-3 text-gray-600 bg-sand rounded-xl
-                       font-medium hover:bg-sand/70 transition-colors"
+            className="flex-1 px-4 py-3 bg-blush-pale text-terra/70 rounded-pill
+                       text-sm font-medium hover:bg-blush-light transition-all duration-200"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 px-4 py-3 text-white bg-purple-600 rounded-xl
-                       font-bold hover:bg-purple-700 transition-colors active:scale-95 shadow-md"
+            className="flex-1 px-4 py-3 text-white bg-terra rounded-pill
+                       text-sm font-medium hover:bg-terra-deep transition-all duration-200
+                       active:scale-95 shadow-[0_4px_12px_rgba(212,117,106,0.3)]"
           >
             Set Reminder
           </button>
         </div>
+
       </div>
     </div>
   )

@@ -132,9 +132,9 @@ export async function startReminderEngine(email: string) {
     console.warn('ReminderEngine: running without notification permission')
   }
 
-  // Run immediately, then every 60 seconds
+  // Run immediately, then every 15 seconds for precise timing
   checkDueReminders()
-  intervalId = setInterval(checkDueReminders, 60_000)
+  intervalId = setInterval(checkDueReminders, 15_000)
 }
 
 // Stop the engine — call on sign-out or unmount

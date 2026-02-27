@@ -45,8 +45,8 @@ export function initGoogleAuth(clientId: string) {
     callback: async (resp: any) => {
       if (resp.access_token) {
         accessToken = resp.access_token
-        // Token expires in ~1 hour, save with 50 min buffer
-        const expiryTime = Date.now() + 50 * 60 * 1000
+        // Token expires in ~1 hour, save with 55 min buffer
+        const expiryTime = Date.now() + 55 * 60 * 1000
         localStorage.setItem(TOKEN_KEY, resp.access_token)
         localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
 

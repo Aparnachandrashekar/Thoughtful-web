@@ -1,27 +1,80 @@
-const CACHE_NAME = 'thoughtful-v1'
+const CACHE_NAME = 'thoughtful-v2'
+
+const PRECACHE_URLS = [
+  '/',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+]
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+  )
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim())
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    ).then(() => clients.claim())
+  )
 })
 
 self.addEventListener('fetch', (event) => {
-  // Network-first strategy: try network, fall back to cache
+  const { request } = event
+  const url = new URL(request.url)
+
+  // Never cache API routes or non-GET requests
+  if (request.method !== 'GET' || url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request))
+    return
+  }
+
+  // Next.js static assets: stale-while-revalidate
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request)
+        const networkFetch = fetch(request).then((response) => {
+          if (response.ok) cache.put(request, response.clone())
+          return response
+        })
+        return cached || networkFetch
+      })
+    )
+    return
+  }
+
+  // Navigation / HTML: network-first, fall back to cached app shell
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match('/'))
+        )
+    )
+    return
+  }
+
+  // Everything else: network-first, fall back to cache
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((response) => {
-        // Cache successful responses
         if (response.ok) {
           const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone)
-          })
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
         }
         return response
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(request))
   )
 })

@@ -133,12 +133,57 @@ const OTHER_TEMPLATES: CareTemplate[] = [
   }
 ]
 
+const SPOUSE_TEMPLATES: CareTemplate[] = [
+  {
+    id: 'spouse-date-night',
+    label: 'Date night',
+    emoji: '🌹',
+    textTemplate: 'Plan date night with {name}',
+    recurrence: 'weekly',
+    description: 'Keep the romance alive with weekly date nights'
+  },
+  {
+    id: 'spouse-adventure',
+    label: 'Monthly adventure',
+    emoji: '🗺️',
+    textTemplate: 'Plan something new with {name}',
+    recurrence: 'monthly',
+    description: 'Try something new together every month'
+  },
+  {
+    id: 'spouse-anniversary',
+    label: 'Anniversary',
+    emoji: '💝',
+    textTemplate: 'Celebrate anniversary with {name}',
+    recurrence: 'yearly',
+    daysBefore: 7,
+    description: 'Reminder 1 week before your anniversary'
+  },
+  {
+    id: 'spouse-checkin',
+    label: 'Weekly check-in',
+    emoji: '💌',
+    textTemplate: 'Check in with {name}',
+    recurrence: 'weekly',
+    description: 'A dedicated moment to connect each week'
+  },
+  {
+    id: 'spouse-appreciation',
+    label: 'Appreciation note',
+    emoji: '🙏',
+    textTemplate: 'Write an appreciation note for {name}',
+    recurrence: 'monthly',
+    description: 'Express gratitude and love regularly'
+  }
+]
+
 // Map relationship types to their templates
 const TEMPLATES_BY_RELATIONSHIP: Record<RelationshipType, CareTemplate[]> = {
   family: FAMILY_TEMPLATES,
   close_friend: CLOSE_FRIEND_TEMPLATES,
   friend: FRIEND_TEMPLATES,
   work: WORK_TEMPLATES,
+  spouse: SPOUSE_TEMPLATES,
   other: OTHER_TEMPLATES
 }
 
@@ -158,6 +203,7 @@ export function getAllTemplates(): CareTemplate[] {
     ...CLOSE_FRIEND_TEMPLATES,
     ...FRIEND_TEMPLATES,
     ...WORK_TEMPLATES,
+    ...SPOUSE_TEMPLATES,
     ...OTHER_TEMPLATES
   ]
 }

@@ -9,10 +9,11 @@ import DatePickerModal from '@/components/DatePickerModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
 import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
-import { getRemindersKey, isSignedIn, createCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
+import { getRemindersKey, isSignedIn, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore, pullFromFirestore } from '@/lib/db'
-import { parseReminder } from '@/lib/parser'
+import { parseReminder, RecurrenceInfo } from '@/lib/parser'
+import EditReminderModal from '@/components/EditReminderModal'
 
 export default function PersonProfilePage() {
   const params = useParams()
@@ -44,6 +45,7 @@ export default function PersonProfilePage() {
   const [newReminderText, setNewReminderText] = useState('')
   const [addingReminder, setAddingReminder] = useState(false)
   const [pendingProfileReminder, setPendingProfileReminder] = useState<string | null>(null)
+  const [editingProfileReminder, setEditingProfileReminder] = useState<Reminder | null>(null)
 
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
@@ -160,7 +162,7 @@ export default function PersonProfilePage() {
     }
   }
 
-  const createReminderWithDate = async (text: string, dateTime: Date) => {
+  const createReminderWithDate = async (text: string, dateTime: Date, recurrence?: RecurrenceInfo) => {
     if (!person) return
     setAddingReminder(true)
     try {
@@ -171,10 +173,17 @@ export default function PersonProfilePage() {
         friendlyTitle = text
       }
 
+      // For birthdays/anniversaries, trigger 1 day before the actual date
+      let reminderDateTime = dateTime
+      if (recurrence?.isBirthday || recurrence?.isAnniversary) {
+        reminderDateTime = new Date(dateTime)
+        reminderDateTime.setDate(reminderDateTime.getDate() - 1)
+      }
+
       const id = Date.now().toString()
       const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
       const message = friendlyTitle
-      const triggerAt = dateTime.getTime()
+      const triggerAt = reminderDateTime.getTime()
       const whatsappLink = phoneNumber
         ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
         : undefined
@@ -182,7 +191,7 @@ export default function PersonProfilePage() {
       const newReminder: Reminder = {
         id,
         text: friendlyTitle,
-        date: dateTime,
+        date: reminderDateTime,
         isCompleted: false,
         message,
         personName: person.name,
@@ -205,7 +214,7 @@ export default function PersonProfilePage() {
         setStatus('Creating calendar event...')
         const result = await createCalendarEvent({
           title: friendlyTitle,
-          date: dateTime.toISOString(),
+          date: reminderDateTime.toISOString(),
         })
 
         if (result?.id) {
@@ -246,7 +255,7 @@ export default function PersonProfilePage() {
     const parsed = parseReminder(newReminderText.trim())
 
     if (parsed.date) {
-      await createReminderWithDate(newReminderText.trim(), parsed.date)
+      await createReminderWithDate(newReminderText.trim(), parsed.date, parsed.recurrence)
     } else {
       // No date found — open date picker
       setPendingProfileReminder(newReminderText.trim())
@@ -288,6 +297,29 @@ export default function PersonProfilePage() {
     saveReminders(updatedReminders)
     setReminders(prev => prev.filter(r => r.id !== id))
     if (userEmail) deleteReminderFromFirestore(userEmail, id)
+  }
+
+  const handleEditProfileReminder = async (id: string, text: string, date: Date) => {
+    setEditingProfileReminder(null)
+    const reminder = reminders.find(r => r.id === id)
+    if (!reminder) return
+    const updated: Reminder = { ...reminder, text, date, triggerAt: date.getTime() }
+    const allReminders = loadReminders()
+    const updatedAll = allReminders.map((r: Reminder) => r.id === id ? updated : r)
+    saveReminders(updatedAll)
+    setReminders(prev => prev.map(r => r.id === id ? updated : r))
+    if (userEmail) syncReminderToFirestore(userEmail, updated)
+    if (reminder.calendarEventId && isSignedIn()) {
+      try {
+        await updateCalendarEvent(reminder.calendarEventId, { title: text, date: date.toISOString() })
+        setStatus('Reminder updated')
+      } catch {
+        setStatus('Updated locally (calendar sync failed)')
+      }
+    } else {
+      setStatus('Reminder updated')
+    }
+    setTimeout(() => setStatus(null), 2000)
   }
 
   const handleConfirmTemplate = async (data: {
@@ -715,6 +747,19 @@ export default function PersonProfilePage() {
                             </svg>
                           </a>
                         )}
+                        {activeTab === 'upcoming' && (
+                          <button
+                            onClick={() => setEditingProfileReminder(reminder)}
+                            className="p-1.5 text-terra/35 hover:text-terra rounded-xl
+                                       hover:bg-blush-pale transition-all duration-150"
+                            title="Edit"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             const phone = (reminder.phoneNumber || person.phone || '').replace(/[^0-9]/g, '')
@@ -776,6 +821,15 @@ export default function PersonProfilePage() {
           text={pendingProfileReminder}
           onConfirm={handleProfileDatePicked}
           onCancel={() => setPendingProfileReminder(null)}
+        />
+      )}
+
+      {/* Edit Reminder Modal */}
+      {editingProfileReminder && (
+        <EditReminderModal
+          reminder={editingProfileReminder}
+          onConfirm={handleEditProfileReminder}
+          onCancel={() => setEditingProfileReminder(null)}
         />
       )}
 

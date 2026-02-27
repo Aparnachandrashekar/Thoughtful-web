@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
+import EditReminderModal from '@/components/EditReminderModal'
 import RecurrenceEndDateModal from '@/components/RecurrenceEndDateModal'
 import RelationshipsSidebar from '@/components/RelationshipsSidebar'
 import PersonConfirmationModal from '@/components/PersonConfirmationModal'
@@ -109,6 +110,9 @@ export default function Home() {
 
   // Rate-limit GCal change polling: at most once every 30 seconds (reset on tab hide)
   const lastGcalCheck = useRef<number>(0)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
 
   // Save reminders for current user
   const saveReminders = useCallback((newReminders: Reminder[]) => {
@@ -345,10 +349,24 @@ export default function Home() {
       setUserEmail(email)
       setStatus(`Signed in as ${email}`)
       setTimeout(() => setStatus(null), 2000)
+      // Proactively refresh token at 44 minutes (well before 55-min expiry)
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = setTimeout(() => {
+        setIsRefreshing(true)
+        tryRefreshToken(() => {
+          setIsRefreshing(false)
+          setCalendarConnected(true)
+        })
+      }, 44 * 60 * 1000)
     })
   }
 
   const handleGoogleSignOut = () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+    setIsRefreshing(false)
     stopReminderEngine()
     signOut()
     setSignedIn(false)
@@ -418,7 +436,13 @@ export default function Home() {
 
     const phoneNumber = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : undefined
     const message = friendlyTitle
-    const triggerAt = date.getTime()
+    // For birthdays/anniversaries, trigger 1 day before the actual date
+    let reminderDate = date
+    if (recurrenceOptions?.isBirthday || recurrenceOptions?.isAnniversary) {
+      reminderDate = new Date(date)
+      reminderDate.setDate(reminderDate.getDate() - 1)
+    }
+    const triggerAt = reminderDate.getTime()
     const whatsappLink = phoneNumber
       ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
       : undefined
@@ -426,7 +450,7 @@ export default function Home() {
     const newReminder: Reminder = {
       id,
       text: friendlyTitle,
-      date,
+      date: reminderDate,
       isCompleted: false,
       calendarEventId: existingReminder?.calendarEventId,
       calendarHtmlLink: existingReminder?.calendarHtmlLink,
@@ -459,14 +483,14 @@ export default function Home() {
         if (isUpdate && existingReminder?.calendarEventId) {
           await updateCalendarEvent(existingReminder.calendarEventId, {
             title: friendlyTitle,
-            date: date.toISOString()
+            date: reminderDate.toISOString()
           })
-          setStatus(`Updated "${friendlyTitle}" to ${date.toLocaleString()}`)
+          setStatus(`Updated "${friendlyTitle}" to ${reminderDate.toLocaleString()}`)
         } else if (isUpdate && existingReminder) {
           // Update exists locally but no calendar event - create one
           const result = await createCalendarEvent({
             title: friendlyTitle,
-            date: date.toISOString(),
+            date: reminderDate.toISOString(),
             recurrence: recurrenceOptions
           })
           if (result?.id) {
@@ -488,7 +512,7 @@ export default function Home() {
           setStatus(statusMsg)
           const result = await createCalendarEvent({
             title: friendlyTitle,
-            date: date.toISOString(),
+            date: reminderDate.toISOString(),
             recurrence: recurrenceOptions
           })
           // Store the calendar event ID, html link, and sync metadata
@@ -707,6 +731,11 @@ export default function Home() {
     }
   }
 
+  const handleEdit = (id: string) => {
+    const r = reminders.find(rem => rem.id === id)
+    if (r) setEditingReminder(r)
+  }
+
   const handleDelete = async (id: string) => {
     const reminder = reminders.find(r => r.id === id)
     if (reminder?.calendarEventId && isSignedIn()) {
@@ -736,7 +765,7 @@ export default function Home() {
       )}
 
       <main className="px-5 sm:px-8 md:px-14 py-8 sm:py-10 md:py-14">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-3xl mx-auto">
 
           {/* Top bar: hamburger (all sizes when signed in) + sign-in */}
           <div className="flex items-center justify-between mb-8 sm:mb-10 animate-fade-in">
@@ -770,7 +799,7 @@ export default function Home() {
                   Sign in with Google
                 </button>
               )}
-              {googleReady && signedIn && !calendarConnected && (
+              {googleReady && signedIn && !calendarConnected && !isRefreshing && (
                 <button
                   onClick={handleGoogleSignIn}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium
@@ -860,6 +889,7 @@ export default function Home() {
                 people={people}
                 onToggle={handleToggle}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
               />
             </>
           ) : (
@@ -897,6 +927,21 @@ export default function Home() {
           detectedName={pendingNameConfirmation.detectedName}
           onConfirm={handleConfirmPerson}
           onDeny={handleDenyPerson}
+        />
+      )}
+
+      {/* Edit Reminder Modal */}
+      {editingReminder && (
+        <EditReminderModal
+          reminder={editingReminder}
+          onConfirm={(id, text, date) => {
+            const r = reminders.find(rem => rem.id === id)
+            if (r) {
+              setEditingReminder(null)
+              addReminderWithDate(text, date, true, r)
+            }
+          }}
+          onCancel={() => setEditingReminder(null)}
         />
       )}
     </div>

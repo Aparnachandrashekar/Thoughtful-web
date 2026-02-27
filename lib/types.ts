@@ -1,6 +1,6 @@
 // Shared types for the People/Relationships feature
 
-export type RelationshipType = 'family' | 'close_friend' | 'friend' | 'work' | 'other'
+export type RelationshipType = 'family' | 'close_friend' | 'friend' | 'work' | 'spouse' | 'other'
 
 export interface Person {
   id: string                    // Date.now().toString()
@@ -37,6 +37,7 @@ export const RELATIONSHIP_LABELS: Record<RelationshipType, string> = {
   close_friend: 'Close Friend',
   friend: 'Friend',
   work: 'Work',
+  spouse: 'Spouse / Partner',
   other: 'Other'
 }
 
@@ -45,5 +46,6 @@ export const RELATIONSHIP_EMOJI: Record<RelationshipType, string> = {
   close_friend: '💜',
   friend: '😊',
   work: '💼',
+  spouse: '💑',
   other: '👤'
 }

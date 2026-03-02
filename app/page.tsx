@@ -436,13 +436,11 @@ export default function Home() {
 
     const phoneNumber = detectedPhone ? detectedPhone.replace(/[^0-9+]/g, '') : undefined
     const message = friendlyTitle
-    // For birthdays/anniversaries, trigger 1 day before the actual date
-    let reminderDate = date
-    if (recurrenceOptions?.isBirthday || recurrenceOptions?.isAnniversary) {
-      reminderDate = new Date(date)
-      reminderDate.setDate(reminderDate.getDate() - 1)
-    }
-    const triggerAt = reminderDate.getTime()
+    // For birthdays/anniversaries: calendar event + display stay on the actual date,
+    // but the notification fires 1 day before so the user has time to prepare
+    const triggerAt = (recurrenceOptions?.isBirthday || recurrenceOptions?.isAnniversary)
+      ? new Date(date.getTime() - 24 * 60 * 60 * 1000).getTime()
+      : date.getTime()
     const whatsappLink = phoneNumber
       ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
       : undefined
@@ -450,7 +448,7 @@ export default function Home() {
     const newReminder: Reminder = {
       id,
       text: friendlyTitle,
-      date: reminderDate,
+      date,
       isCompleted: false,
       calendarEventId: existingReminder?.calendarEventId,
       calendarHtmlLink: existingReminder?.calendarHtmlLink,
@@ -483,14 +481,14 @@ export default function Home() {
         if (isUpdate && existingReminder?.calendarEventId) {
           await updateCalendarEvent(existingReminder.calendarEventId, {
             title: friendlyTitle,
-            date: reminderDate.toISOString()
+            date: date.toISOString()
           })
-          setStatus(`Updated "${friendlyTitle}" to ${reminderDate.toLocaleString()}`)
+          setStatus(`Updated "${friendlyTitle}" to ${date.toLocaleString()}`)
         } else if (isUpdate && existingReminder) {
           // Update exists locally but no calendar event - create one
           const result = await createCalendarEvent({
             title: friendlyTitle,
-            date: reminderDate.toISOString(),
+            date: date.toISOString(),
             recurrence: recurrenceOptions
           })
           if (result?.id) {
@@ -512,7 +510,7 @@ export default function Home() {
           setStatus(statusMsg)
           const result = await createCalendarEvent({
             title: friendlyTitle,
-            date: reminderDate.toISOString(),
+            date: date.toISOString(),
             recurrence: recurrenceOptions
           })
           // Store the calendar event ID, html link, and sync metadata

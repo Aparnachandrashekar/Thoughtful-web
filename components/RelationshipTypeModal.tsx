@@ -9,7 +9,7 @@ interface RelationshipTypeModalProps {
   onCancel: () => void
 }
 
-const RELATIONSHIP_OPTIONS: RelationshipType[] = ['family', 'close_friend', 'friend', 'work', 'other']
+const RELATIONSHIP_OPTIONS: RelationshipType[] = ['family', 'close_friend', 'friend', 'work', 'spouse', 'other']
 
 export default function RelationshipTypeModal({
   personName,

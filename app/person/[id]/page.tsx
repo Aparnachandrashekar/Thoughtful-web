@@ -173,17 +173,14 @@ export default function PersonProfilePage() {
         friendlyTitle = text
       }
 
-      // For birthdays/anniversaries, trigger 1 day before the actual date
-      let reminderDateTime = dateTime
-      if (recurrence?.isBirthday || recurrence?.isAnniversary) {
-        reminderDateTime = new Date(dateTime)
-        reminderDateTime.setDate(reminderDateTime.getDate() - 1)
-      }
-
       const id = Date.now().toString()
       const phoneNumber = person.phone ? person.phone.replace(/[^0-9+]/g, '') : undefined
       const message = friendlyTitle
-      const triggerAt = reminderDateTime.getTime()
+      // For birthdays/anniversaries: calendar event + display on actual date,
+      // notification fires 1 day before
+      const triggerAt = (recurrence?.isBirthday || recurrence?.isAnniversary)
+        ? new Date(dateTime.getTime() - 24 * 60 * 60 * 1000).getTime()
+        : dateTime.getTime()
       const whatsappLink = phoneNumber
         ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
         : undefined
@@ -191,7 +188,7 @@ export default function PersonProfilePage() {
       const newReminder: Reminder = {
         id,
         text: friendlyTitle,
-        date: reminderDateTime,
+        date: dateTime,
         isCompleted: false,
         message,
         personName: person.name,
@@ -214,7 +211,7 @@ export default function PersonProfilePage() {
         setStatus('Creating calendar event...')
         const result = await createCalendarEvent({
           title: friendlyTitle,
-          date: reminderDateTime.toISOString(),
+          date: dateTime.toISOString(),
         })
 
         if (result?.id) {

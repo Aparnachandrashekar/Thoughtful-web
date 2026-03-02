@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
 
 export async function POST(request: NextRequest) {
   const { text } = await request.json()
@@ -17,20 +17,25 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `You are a warm, gentle reminder assistant. Given this raw reminder text, rewrite it as a short, friendly nudge. Keep it brief (under 12 words). Don't be overly enthusiastic or use exclamation marks. Be calm and thoughtful, like a kind friend. Examples of tone:
-- "Call mom" → "A gentle nudge to call Mom today"
-- "Buy flowers anniversary" → "Time to pick up flowers for the anniversary"
-- "Check in with Raj" → "Maybe drop Raj a quick hello"
-- "Dentist Friday" → "Heads up — dentist appointment on Friday"
+            text: `Extract a short, clean reminder title. 2–5 words, title case. Remove all dates, times, recurrence words, and filler. Keep the core action and subject only.
 
-Now rewrite this: "${text}"
+Examples:
+"remind me to call mom tomorrow at 5pm" → "Call Mom"
+"dentist appointment on Friday" → "Dentist Appointment"
+"buy anniversary flowers for Sarah" → "Anniversary Flowers for Sarah"
+"check in with Raj about the project every Monday" → "Check In with Raj"
+"mom's birthday March 15" → "Mom's Birthday"
+"coffee with Jessica next Tuesday at 9am" → "Coffee with Jessica"
+"send thank you note to the team" → "Thank You Note"
 
-Respond with ONLY the rewritten title, nothing else.`
+Reminder text: "${text}"
+
+Reply with ONLY the title, nothing else.`
           }]
         }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 30,
+          temperature: 0.3,
+          maxOutputTokens: 20,
         }
       }),
     })

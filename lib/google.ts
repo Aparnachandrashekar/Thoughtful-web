@@ -1,4 +1,4 @@
-export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
+export const SCOPES = 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/userinfo.email'
 
 export let tokenClient: any = null
 export let accessToken: string | null = null
@@ -9,6 +9,10 @@ let onSignIn: ((email: string) => void) | null = null
 const TOKEN_KEY = 'thoughtful-google-token'
 const TOKEN_EXPIRY_KEY = 'thoughtful-google-token-expiry'
 const USER_EMAIL_KEY = 'thoughtful-google-email'
+const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
+
+// In-memory cache for the Thoughtful calendar ID (also stored in localStorage)
+let thoughtfulCalendarId: string | null = null
 
 export function initGoogleAuth(clientId: string) {
   if (typeof window === 'undefined') return
@@ -98,6 +102,7 @@ export function tryRefreshToken(onRefresh: () => void): void {
 export function signOut() {
   accessToken = null
   userEmail = null
+  thoughtfulCalendarId = null  // clear in-memory cache; localStorage entry is kept to reuse on next sign-in
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(TOKEN_EXPIRY_KEY)
   localStorage.removeItem(USER_EMAIL_KEY)
@@ -226,6 +231,69 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
+// Get the "Thoughtful" calendar ID, creating it if it doesn't exist yet.
+// Result is cached in memory and localStorage so only the first call per session
+// hits the network.
+async function getOrCreateThoughtfulCalendar(): Promise<string> {
+  // 1. In-memory cache
+  if (thoughtfulCalendarId) return thoughtfulCalendarId
+
+  // 2. localStorage cache
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(THOUGHTFUL_CALENDAR_KEY)
+    if (cached) {
+      thoughtfulCalendarId = cached
+      return cached
+    }
+  }
+
+  if (!accessToken) throw new Error('Not signed in')
+
+  // 3. List app-created calendars to find an existing "Thoughtful" calendar
+  try {
+    const listRes = await fetchWithTimeout(
+      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (listRes.ok) {
+      const listData = await listRes.json()
+      const existing = (listData.items as any[])?.find((c: any) => c.summary === 'Thoughtful')
+      if (existing?.id) {
+        thoughtfulCalendarId = existing.id
+        if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, existing.id)
+        return existing.id
+      }
+    }
+  } catch {}
+
+  // 4. Create a new "Thoughtful" calendar
+  const createRes = await fetchWithTimeout(
+    'https://www.googleapis.com/calendar/v3/calendars',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        summary: 'Thoughtful',
+        description: 'Reminders created by Thoughtful',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    }
+  )
+
+  if (!createRes.ok) {
+    const err = await createRes.json().catch(() => ({}))
+    throw new Error(err.error?.message || `Failed to create Thoughtful calendar (${createRes.status})`)
+  }
+
+  const calData = await createRes.json()
+  thoughtfulCalendarId = calData.id
+  if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, calData.id)
+  return calData.id
+}
+
 export async function createCalendarEvent(event: {
   title: string
   date: string
@@ -287,9 +355,10 @@ export async function createCalendarEvent(event: {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
+  const calendarId = await getOrCreateThoughtfulCalendar()
   const url = event.addMeetLink
-    ? 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1'
-    : 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1`
+    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
 
   const res = await fetchWithTimeout(url, {
     method: 'POST',
@@ -319,8 +388,9 @@ export async function updateCalendarEvent(eventId: string, event: {
   const startDate = new Date(event.date)
   const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
 
+  const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
   const res = await fetchWithTimeout(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
     {
       method: 'PATCH',
       headers: {
@@ -346,8 +416,9 @@ export async function updateCalendarEvent(eventId: string, event: {
 export async function getCalendarEvent(eventId: string): Promise<any> {
   if (!accessToken) throw new Error('Not signed in')
 
+  const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
   const res = await fetchWithTimeout(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
     {
       method: 'GET',
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -366,8 +437,9 @@ export async function deleteCalendarEvent(eventId: string) {
   if (!accessToken) return
 
   try {
+    const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
     await fetchWithTimeout(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
       {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },

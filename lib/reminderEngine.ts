@@ -129,7 +129,11 @@ export async function startReminderEngine(email: string) {
 
   const hasPermission = await requestNotificationPermission()
   if (!hasPermission) {
-    console.warn('ReminderEngine: running without notification permission')
+    console.warn('ReminderEngine: notification permission not granted — notifications will not appear')
+    // Dispatch a custom event so the UI can show a visible prompt
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thoughtful:notifications-blocked'))
+    }
   }
 
   // Run immediately, then every 15 seconds for precise timing

@@ -118,6 +118,22 @@ export function getRemindersCollection(email: string) {
   return remindersCol(email)
 }
 
+function getDueRemindersFromLocalStorage(email: string): Array<{ id: string; [key: string]: any }> {
+  if (typeof window === 'undefined') return []
+  try {
+    const key = `thoughtful-reminders-${email}`
+    const saved = localStorage.getItem(key)
+    if (!saved) return []
+    const reminders: any[] = JSON.parse(saved)
+    const now = Date.now()
+    return reminders.filter(r =>
+      !r.triggered && !r.isCompleted && r.triggerAt && r.triggerAt <= now
+    )
+  } catch {
+    return []
+  }
+}
+
 export async function getDueReminders(email: string): Promise<Array<{ id: string; [key: string]: any }>> {
   try {
     const col = remindersCol(email)
@@ -129,8 +145,8 @@ export async function getDueReminders(email: string): Promise<Array<{ id: string
     const snap = await getDocs(q)
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
   } catch (e) {
-    console.error('Firestore: failed to query due reminders:', e)
-    return []
+    console.error('Firestore: failed to query due reminders, falling back to localStorage:', e)
+    return getDueRemindersFromLocalStorage(email)
   }
 }
 
@@ -153,6 +169,21 @@ export async function getPeopleForUser(email: string): Promise<Array<{ id: strin
 }
 
 export async function markReminderTriggered(email: string, reminderId: string): Promise<void> {
+  // Update localStorage immediately so the engine doesn't re-fire on next poll
+  if (typeof window !== 'undefined') {
+    try {
+      const key = `thoughtful-reminders-${email}`
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        const reminders = JSON.parse(saved)
+        const updated = reminders.map((r: any) =>
+          r.id === reminderId ? { ...r, triggered: true } : r
+        )
+        localStorage.setItem(key, JSON.stringify(updated))
+      }
+    } catch {}
+  }
+  // Also update Firestore
   try {
     const ref = doc(remindersCol(email), reminderId)
     await updateDoc(ref, { triggered: true })

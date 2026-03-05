@@ -57,12 +57,14 @@ export function initGoogleAuth(clientId: string) {
         localStorage.setItem(TOKEN_KEY, resp.access_token)
         localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
 
-        // Sign into Firebase Auth using the Google access token — this lets
-        // Firestore security rules verify the user's identity
-        const credential = GoogleAuthProvider.credential(null, resp.access_token)
-        signInWithCredential(auth, credential).catch(err =>
+        // Sign into Firebase Auth BEFORE calling onSignIn, so Firestore
+        // security rules are satisfied by the time pullFromFirestore runs
+        try {
+          const credential = GoogleAuthProvider.credential(null, resp.access_token)
+          await signInWithCredential(auth, credential)
+        } catch (err) {
           console.warn('Firebase Auth sign-in failed (Firestore sync may be limited):', err)
-        )
+        }
 
         // Fetch user email
         const email = await fetchUserEmail(resp.access_token)

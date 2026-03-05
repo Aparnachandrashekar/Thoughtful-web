@@ -61,9 +61,10 @@ export function initGoogleAuth(clientId: string) {
         // security rules are satisfied by the time pullFromFirestore runs
         try {
           const credential = GoogleAuthProvider.credential(null, resp.access_token)
-          await signInWithCredential(auth, credential)
-        } catch (err) {
-          console.warn('Firebase Auth sign-in failed (Firestore sync may be limited):', err)
+          const result = await signInWithCredential(auth, credential)
+          console.log('Firebase Auth: signed in as', result.user.email, 'uid:', result.user.uid)
+        } catch (err: any) {
+          console.error('Firebase Auth sign-in FAILED:', err?.code, err?.message)
         }
 
         // Fetch user email

@@ -111,8 +111,6 @@ export default function Home() {
 
   // Rate-limit GCal change polling: at most once every 30 seconds (reset on tab hide)
   const lastGcalCheck = useRef<number>(0)
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [notificationsBlocked, setNotificationsBlocked] = useState(false)
 
@@ -125,36 +123,22 @@ export default function Home() {
   useEffect(() => {
     setMounted(true)
 
-    // Restore user session from localStorage BEFORE Google script loads
-    // This ensures data loads immediately even if token is expired
+    // Restore session from localStorage immediately
     const storedEmail = getStoredEmail()
     if (storedEmail) {
       setSignedIn(true)
       setUserEmail(storedEmail)
     }
 
-    // Init Google auth (for calendar API access)
-    try {
-      const script = document.createElement('script')
-      script.src = 'https://accounts.google.com/gsi/client'
-      script.async = true
-      script.onload = () => {
-        const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
-        if (clientId) {
-          initGoogleAuth(clientId)
-          setGoogleReady(true)
-          const tokenValid = isSignedIn()
-          setCalendarConnected(tokenValid)
-          // If we have a valid token, ensure state is set
-          if (tokenValid && !storedEmail) {
-            setSignedIn(true)
-            setUserEmail(getUserEmail())
-          }
-        }
-      }
-      document.head.appendChild(script)
-    } catch {
-      // Google auth failed to load, app still works without it
+    // Init Google auth (restores cached token, no script needed)
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
+    initGoogleAuth(clientId)
+    setGoogleReady(true)
+    const tokenValid = isSignedIn()
+    setCalendarConnected(tokenValid)
+    if (tokenValid && !storedEmail) {
+      setSignedIn(true)
+      setUserEmail(getUserEmail())
     }
   }, [])
 
@@ -362,24 +346,10 @@ export default function Home() {
       getOrCreateThoughtfulCalendar().catch((err) => {
         console.error('Failed to create Thoughtful calendar:', err)
       })
-      // Proactively refresh token at 44 minutes (well before 55-min expiry)
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-      refreshTimerRef.current = setTimeout(() => {
-        setIsRefreshing(true)
-        tryRefreshToken(() => {
-          setIsRefreshing(false)
-          setCalendarConnected(true)
-        })
-      }, 44 * 60 * 1000)
     })
   }
 
   const handleGoogleSignOut = () => {
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current)
-      refreshTimerRef.current = null
-    }
-    setIsRefreshing(false)
     stopReminderEngine()
     signOut()
     setSignedIn(false)
@@ -389,15 +359,6 @@ export default function Home() {
     setStatus('Signed out')
     setTimeout(() => setStatus(null), 2000)
   }
-
-  // Auto-refresh expired token silently — runs whenever calendarConnected drops to false
-  // while the user is still signed in (email present). Uses prompt:'' so no popup appears.
-  useEffect(() => {
-    if (!signedIn || calendarConnected || !googleReady) return
-    tryRefreshToken(() => {
-      setCalendarConnected(true)
-    })
-  }, [signedIn, calendarConnected, googleReady])
 
   const addReminderWithDate = useCallback(async (
     rawText: string,  // Original user input for AI title generation
@@ -790,7 +751,7 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {googleReady && !calendarConnected && !isRefreshing && (
+              {googleReady && !calendarConnected && (
                 <button
                   onClick={handleGoogleSignIn}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium

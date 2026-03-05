@@ -1,4 +1,4 @@
-const CACHE_NAME = 'thoughtful-v2'
+const CACHE_NAME = 'thoughtful-v3'
 
 const PRECACHE_URLS = [
   '/',
@@ -6,6 +6,19 @@ const PRECACHE_URLS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ]
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const whatsappLink = event.notification.data?.whatsappLink
+  event.waitUntil(
+    whatsappLink
+      ? clients.openWindow(whatsappLink)
+      : clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+          if (clientList.length > 0) return clientList[0].focus()
+          return clients.openWindow('/')
+        })
+  )
+})
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()

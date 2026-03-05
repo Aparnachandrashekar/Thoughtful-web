@@ -26,7 +26,8 @@ async function requestNotificationPermission(): Promise<boolean> {
 }
 
 // Show notification for a due reminder
-function showNotification(reminder: { id: string; message?: string; text?: string; whatsappLink?: string; personName?: string }) {
+// Uses service worker showNotification (required for Safari) with fallback to Notification constructor
+async function showNotification(reminder: { id: string; message?: string; text?: string; whatsappLink?: string; personName?: string }) {
   const title = reminder.message || reminder.text || 'You have a reminder'
 
   const body = reminder.whatsappLink && reminder.personName
@@ -35,18 +36,34 @@ function showNotification(reminder: { id: string; message?: string; text?: strin
     ? `Click here to send a WhatsApp message for ${title}`
     : title
 
-  const notification = new Notification('Thoughtful', {
+  const options = {
     body,
-    icon: '/favicon.ico',
-    tag: `reminder-${reminder.id}`, // prevents duplicate notifications for same reminder
-  })
+    icon: '/icons/icon-192.png',
+    tag: `reminder-${reminder.id}`,
+    data: { whatsappLink: reminder.whatsappLink || null },
+  }
 
-  notification.onclick = () => {
-    notification.close()
-    if (reminder.whatsappLink) {
-      window.open(reminder.whatsappLink, '_blank')
-    } else {
-      window.focus()
+  // Prefer service worker notification (works in Safari, required for iOS)
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready
+      await registration.showNotification('Thoughtful', options)
+      return
+    } catch (e) {
+      console.warn('ReminderEngine: SW notification failed, falling back', e)
+    }
+  }
+
+  // Fallback: direct Notification constructor (Chrome/Firefox non-incognito)
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const notification = new Notification('Thoughtful', options)
+    notification.onclick = () => {
+      notification.close()
+      if (reminder.whatsappLink) {
+        window.open(reminder.whatsappLink, '_blank')
+      } else {
+        window.focus()
+      }
     }
   }
 }
@@ -111,7 +128,7 @@ async function checkDueReminders() {
 
       const enriched: { id: string; [key: string]: any } = { ...reminder, whatsappLink, personName }
       console.log('ReminderEngine: triggering reminder:', enriched.message, '| triggerAt:', enriched.triggerAt, '| whatsappLink:', enriched.whatsappLink)
-      showNotification(enriched)
+      await showNotification(enriched)
       await markReminderTriggered(currentEmail, reminder.id)
     }
   } catch (e) {

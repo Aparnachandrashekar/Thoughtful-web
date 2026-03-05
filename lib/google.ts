@@ -1,3 +1,6 @@
+import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from 'firebase/auth'
+import { auth } from './firebase'
+
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/userinfo.email'
 
 export let tokenClient: any = null
@@ -54,6 +57,13 @@ export function initGoogleAuth(clientId: string) {
         localStorage.setItem(TOKEN_KEY, resp.access_token)
         localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
 
+        // Sign into Firebase Auth using the Google access token — this lets
+        // Firestore security rules verify the user's identity
+        const credential = GoogleAuthProvider.credential(null, resp.access_token)
+        signInWithCredential(auth, credential).catch(err =>
+          console.warn('Firebase Auth sign-in failed (Firestore sync may be limited):', err)
+        )
+
         // Fetch user email
         const email = await fetchUserEmail(resp.access_token)
         if (email) {
@@ -83,7 +93,9 @@ async function fetchUserEmail(token: string): Promise<string | null> {
 export function signIn(callback?: (email: string) => void) {
   if (!tokenClient) return
   if (callback) onSignIn = callback
-  tokenClient.requestAccessToken()
+  // prompt: 'consent' ensures the scope grant screen is always shown,
+  // so calendar.app.created is properly granted (not silently skipped)
+  tokenClient.requestAccessToken({ prompt: 'consent' })
 }
 
 // Silently refresh an expired token without showing a consent popup.
@@ -102,10 +114,12 @@ export function tryRefreshToken(onRefresh: () => void): void {
 export function signOut() {
   accessToken = null
   userEmail = null
-  thoughtfulCalendarId = null  // clear in-memory cache; localStorage entry is kept to reuse on next sign-in
+  thoughtfulCalendarId = null
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(TOKEN_EXPIRY_KEY)
   localStorage.removeItem(USER_EMAIL_KEY)
+  localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
+  firebaseSignOut(auth).catch(() => {})
 }
 
 export function isSignedIn(): boolean {
@@ -234,7 +248,7 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
 // Get the "Thoughtful" calendar ID, creating it if it doesn't exist yet.
 // Result is cached in memory and localStorage so only the first call per session
 // hits the network.
-async function getOrCreateThoughtfulCalendar(): Promise<string> {
+export async function getOrCreateThoughtfulCalendar(): Promise<string> {
   // 1. In-memory cache
   if (thoughtfulCalendarId) return thoughtfulCalendarId
 

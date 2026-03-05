@@ -58,15 +58,16 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">6. Revoking Access</h2>
             <p className="text-sm leading-relaxed">
-              Users may revoke access at:{' '}
+              Users may revoke Google access at any time via their{' '}
               <a
                 href="https://myaccount.google.com/permissions"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-terra hover:underline"
               >
-                myaccount.google.com/permissions
+                Google Account permissions page
               </a>
+              .
             </p>
           </section>
 

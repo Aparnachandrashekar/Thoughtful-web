@@ -21,6 +21,7 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
   getCalendarEvent,
+  getOrCreateThoughtfulCalendar,
   RecurrenceOptions,
   getStoredEmail
 } from '@/lib/google'
@@ -349,6 +350,10 @@ export default function Home() {
       setUserEmail(email)
       setStatus(`Signed in as ${email}`)
       setTimeout(() => setStatus(null), 2000)
+      // Proactively create "Thoughtful" calendar right after sign-in
+      getOrCreateThoughtfulCalendar().catch((err) => {
+        console.error('Failed to create Thoughtful calendar:', err)
+      })
       // Proactively refresh token at 44 minutes (well before 55-min expiry)
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
       refreshTimerRef.current = setTimeout(() => {
@@ -938,6 +943,19 @@ export default function Home() {
           onCancel={() => setEditingReminder(null)}
         />
       )}
+
+      {/* Footer */}
+      <footer className="text-center py-8 px-5">
+        <div className="flex items-center justify-center gap-4 text-xs text-terra/35 font-light">
+          <a href="/privacy" className="hover:text-terra transition-colors">Privacy</a>
+          <span>·</span>
+          <a href="/terms" className="hover:text-terra transition-colors">Terms</a>
+          <span>·</span>
+          <a href="mailto:aparnacs008@gmail.com" className="hover:text-terra transition-colors">Contact</a>
+          <span>·</span>
+          <span>v1.0.0</span>
+        </div>
+      </footer>
     </div>
   )
 }

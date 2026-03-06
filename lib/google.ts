@@ -15,6 +15,9 @@ const TOKEN_EXPIRY_KEY = 'thoughtful-google-token-expiry'
 const USER_EMAIL_KEY = 'thoughtful-google-email'
 const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
 
+// Hardcoded Thoughtful sub-calendar ID — avoids needing calendar listing scope
+const THOUGHTFUL_CALENDAR_DEFAULT = '54146e0adb2e6f985cc85de278460209a445449d6888b4e004d1d0e3afef4b97@group.calendar.google.com'
+
 let thoughtfulCalendarId: string | null = null
 let gisClientId: string | null = null
 
@@ -231,17 +234,13 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
     }
   }
 
-  // Fall back to env var (set at build time, always available)
-  const envCalendarId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID
-  if (envCalendarId) {
-    thoughtfulCalendarId = envCalendarId
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, envCalendarId)
-    }
-    return envCalendarId
+  // Fall back to env var, then hardcoded default
+  const calId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
+  thoughtfulCalendarId = calId
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, calId)
   }
-
-  throw new Error('No Thoughtful calendar ID configured, falling back to primary')
+  return calId
 }
 
 // Detect auth/permission errors from Calendar API responses

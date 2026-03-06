@@ -8,7 +8,7 @@ function isPWA(): boolean {
     (window.navigator as any).standalone === true
 }
 
-export const SCOPES = 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/userinfo.email'
+export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
 export let accessToken: string | null = null
 export let userEmail: string | null = null
@@ -22,7 +22,7 @@ let thoughtfulCalendarId: string | null = null
 
 // Google provider with Calendar scope — Firebase Auth handles the OAuth flow
 const googleProvider = new GoogleAuthProvider()
-googleProvider.addScope('https://www.googleapis.com/auth/calendar.app.created')
+googleProvider.addScope('https://www.googleapis.com/auth/calendar.events')
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email')
 googleProvider.setCustomParameters({ prompt: 'consent' })
 

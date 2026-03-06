@@ -1,4 +1,4 @@
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, inMemoryPersistence, browserLocalPersistence, setPersistence } from 'firebase/auth'
 import { auth } from './firebase'
 
 // In PWA standalone mode, signInWithPopup opens a new Safari tab and never returns — use redirect instead
@@ -82,13 +82,19 @@ function handleAuthResult(result: any, callback?: (email: string) => void) {
 }
 
 // Sign in with Google.
-// - Browser mode: signInWithPopup (postMessage between windows is cross-origin safe)
-// - PWA mode: signInWithRedirect (popups open a new tab in iOS PWA and never return)
+// - Browser mode: inMemoryPersistence + signInWithPopup
+//   inMemoryPersistence stops Firebase creating a firebaseapp.com iframe,
+//   which Safari blocks cross-origin. We manage our own token in localStorage.
+// - PWA mode: browserLocalPersistence + signInWithRedirect
+//   Redirect needs localStorage persistence so auth state survives the page navigation.
 export function signIn(callback?: (email: string) => void) {
   if (isPWA()) {
-    signInWithRedirect(auth, googleProvider)
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => signInWithRedirect(auth, googleProvider))
+      .catch((err) => console.error('Sign-in redirect failed:', err))
   } else {
-    signInWithPopup(auth, googleProvider)
+    setPersistence(auth, inMemoryPersistence)
+      .then(() => signInWithPopup(auth, googleProvider))
       .then((result) => handleAuthResult(result, callback))
       .catch((err) => console.error('Sign-in failed:', err?.code, err?.message))
   }

@@ -231,7 +231,17 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
     }
   }
 
-  throw new Error('No Thoughtful calendar cached, falling back to primary')
+  // Fall back to env var (set at build time, always available)
+  const envCalendarId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID
+  if (envCalendarId) {
+    thoughtfulCalendarId = envCalendarId
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, envCalendarId)
+    }
+    return envCalendarId
+  }
+
+  throw new Error('No Thoughtful calendar ID configured, falling back to primary')
 }
 
 // Detect auth/permission errors from Calendar API responses

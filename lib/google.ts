@@ -220,27 +220,20 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
-// Returns the calendar ID to use for events.
-// Uses cached "Thoughtful" calendar ID if available, otherwise falls back to 'primary'.
-// Does NOT make API calls — calendar.events scope doesn't allow calendar management.
-export async function getOrCreateThoughtfulCalendar(): Promise<string> {
+// Returns the Thoughtful calendar ID. Never falls back to primary.
+// Priority: in-memory → localStorage → env var → hardcoded constant
+function getThoughtfulCalendarId(): string {
   if (thoughtfulCalendarId) return thoughtfulCalendarId
+  const cached = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
+  const id = cached || process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
+  thoughtfulCalendarId = id
+  if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, id)
+  return id
+}
 
-  if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem(THOUGHTFUL_CALENDAR_KEY)
-    if (cached) {
-      thoughtfulCalendarId = cached
-      return cached
-    }
-  }
-
-  // Fall back to env var, then hardcoded default
-  const calId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
-  thoughtfulCalendarId = calId
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, calId)
-  }
-  return calId
+// Kept for backwards compat with page.tsx calls — just runs the sync getter
+export async function getOrCreateThoughtfulCalendar(): Promise<string> {
+  return getThoughtfulCalendarId()
 }
 
 // Detect auth/permission errors from Calendar API responses
@@ -293,7 +286,7 @@ export async function createCalendarEvent(event: {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
-  const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
+  const calendarId = getThoughtfulCalendarId()
   const url = event.addMeetLink
     ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1`
     : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
@@ -321,7 +314,7 @@ export async function updateCalendarEvent(eventId: string, event: { title: strin
   const startDate = new Date(event.date)
   const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
 
-  const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
+  const calendarId = getThoughtfulCalendarId()
   const res = await fetchWithTimeout(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
     {
@@ -348,7 +341,7 @@ export async function updateCalendarEvent(eventId: string, event: { title: strin
 export async function getCalendarEvent(eventId: string): Promise<any> {
   if (!accessToken) throw new Error('Not signed in')
 
-  const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
+  const calendarId = getThoughtfulCalendarId()
   const res = await fetchWithTimeout(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
     { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } }
@@ -368,7 +361,7 @@ export async function deleteCalendarEvent(eventId: string) {
   if (!accessToken) return
 
   try {
-    const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
+    const calendarId = getThoughtfulCalendarId()
     const res = await fetchWithTimeout(
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }

@@ -220,14 +220,11 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
-// Returns the Thoughtful calendar ID. Never falls back to primary.
-// Priority: in-memory → localStorage → env var → hardcoded constant
+// Returns the Thoughtful calendar ID — hardcoded constant, no localStorage, no async.
+// This value is embedded directly in the JS bundle at build time.
 function getThoughtfulCalendarId(): string {
-  if (thoughtfulCalendarId) return thoughtfulCalendarId
-  const cached = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
-  const id = cached || process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
-  thoughtfulCalendarId = id
-  if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, id)
+  const id = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
+  console.log('[Thoughtful] Using calendar ID:', id)
   return id
 }
 

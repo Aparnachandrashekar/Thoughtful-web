@@ -1,4 +1,4 @@
-const CACHE_NAME = 'thoughtful-v4'
+const CACHE_NAME = 'thoughtful-v5'
 
 const PRECACHE_URLS = [
   '/',
@@ -51,17 +51,18 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Next.js static assets: stale-while-revalidate
+  // Next.js static assets: network-first so new deployments take effect immediately
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(request)
-        const networkFetch = fetch(request).then((response) => {
-          if (response.ok) cache.put(request, response.clone())
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
           return response
         })
-        return cached || networkFetch
-      })
+        .catch(() => caches.match(request))
     )
     return
   }

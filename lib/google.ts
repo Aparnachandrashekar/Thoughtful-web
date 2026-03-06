@@ -33,6 +33,12 @@ export function initGoogleAuth(clientId: string) {
     // Keep USER_EMAIL_KEY so existing reminders/people still load
   }
 
+  // Seed the Thoughtful calendar ID from env if not already cached
+  const defaultCalendarId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID
+  if (defaultCalendarId && !localStorage.getItem(THOUGHTFUL_CALENDAR_KEY)) {
+    localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, defaultCalendarId)
+  }
+
   const savedToken = localStorage.getItem(TOKEN_KEY)
   const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
   const savedEmail = localStorage.getItem(USER_EMAIL_KEY)

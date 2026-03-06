@@ -141,15 +141,21 @@ export default function Home() {
       setUserEmail(getUserEmail())
     }
 
-    // Handle redirect sign-in result (PWA mode)
-    checkRedirectResult((email) => {
-      setSignedIn(true)
-      setCalendarConnected(true)
-      setUserEmail(email)
-      setStatus(`Signed in as ${email}`)
-      setTimeout(() => setStatus(null), 2000)
-      getOrCreateThoughtfulCalendar().catch(() => {})
-    })
+    // Handle redirect sign-in result
+    checkRedirectResult(
+      (email) => {
+        setSignedIn(true)
+        setCalendarConnected(true)
+        setUserEmail(email)
+        setStatus(`Signed in as ${email}`)
+        setTimeout(() => setStatus(null), 3000)
+        getOrCreateThoughtfulCalendar().catch(() => {})
+      },
+      (errMsg) => {
+        setStatus(`Sign-in error: ${errMsg}`)
+        setTimeout(() => setStatus(null), 6000)
+      }
+    )
   }, [])
 
   // Load reminders when user changes or on mount

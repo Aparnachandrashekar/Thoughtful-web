@@ -1,5 +1,12 @@
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
 import { auth } from './firebase'
+
+// In PWA standalone mode, signInWithPopup opens a new Safari tab and never returns — use redirect instead
+function isPWA(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+}
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
@@ -57,36 +64,53 @@ export function initGoogleAuth(_clientId: string) {
 
 function handleAuthResult(result: any, callback?: (email: string) => void) {
   const credential = GoogleAuthProvider.credentialFromResult(result)
+  console.log('handleAuthResult: credential present:', !!credential, 'accessToken present:', !!credential?.accessToken)
   if (credential?.accessToken) {
     accessToken = credential.accessToken
     const expiryTime = Date.now() + 55 * 60 * 1000
     localStorage.setItem(TOKEN_KEY, credential.accessToken)
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
     localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+  } else {
+    console.warn('handleAuthResult: no accessToken in credential — calendar will not work')
   }
   const email = result.user.email || ''
   userEmail = email
   localStorage.setItem(USER_EMAIL_KEY, email)
-  console.log('Firebase Auth: signed in as', email)
+  console.log('Firebase Auth: signed in as', email, '| calendarToken:', !!accessToken)
   if (callback) callback(email)
 }
 
-// Sign in with Google — always uses redirect (popup blocked by Safari cross-origin policy)
-export function signIn(_callback?: (email: string) => void) {
-  signInWithRedirect(auth, googleProvider)
+// Sign in with Google.
+// - Browser mode: signInWithPopup (postMessage between windows is cross-origin safe)
+// - PWA mode: signInWithRedirect (popups open a new tab in iOS PWA and never return)
+export function signIn(callback?: (email: string) => void) {
+  if (isPWA()) {
+    signInWithRedirect(auth, googleProvider)
+  } else {
+    signInWithPopup(auth, googleProvider)
+      .then((result) => handleAuthResult(result, callback))
+      .catch((err) => console.error('Sign-in failed:', err?.code, err?.message))
+  }
 }
 
 // Call on page load to handle the result of a redirect sign-in.
 // sessionStorage is cleared by cross-origin redirects so we cannot use it as a guard —
 // getRedirectResult safely returns null when there is no pending redirect.
-export async function checkRedirectResult(callback?: (email: string) => void): Promise<void> {
+export async function checkRedirectResult(
+  callback?: (email: string) => void,
+  onError?: (msg: string) => void
+): Promise<void> {
   try {
+    console.log('checkRedirectResult: calling getRedirectResult...')
     const result = await getRedirectResult(auth)
+    console.log('checkRedirectResult: result =', result ? `user=${result.user?.email}` : 'null')
     if (result) {
       handleAuthResult(result, callback)
     }
   } catch (err: any) {
     console.error('Redirect sign-in failed:', err?.code, err?.message)
+    if (onError) onError(err?.message || err?.code || 'Sign-in failed')
   }
 }
 

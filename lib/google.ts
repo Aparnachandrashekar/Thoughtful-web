@@ -1,5 +1,12 @@
-import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
 import { auth } from './firebase'
+
+// In PWA standalone mode, signInWithPopup doesn't work on iOS — use redirect instead
+function isPWA(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+}
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/userinfo.email'
 
@@ -41,30 +48,50 @@ export function initGoogleAuth(_clientId: string) {
   }
 }
 
-// Sign in with Google via Firebase Auth popup — gives Firebase auth token
-// (for Firestore) AND Google access token (for Calendar) in one step
-export function signIn(callback?: (email: string) => void) {
-  signInWithPopup(auth, googleProvider)
-    .then((result) => {
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      if (credential?.accessToken) {
-        accessToken = credential.accessToken
-        const expiryTime = Date.now() + 55 * 60 * 1000
-        localStorage.setItem(TOKEN_KEY, credential.accessToken)
-        localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
-      }
-      const email = result.user.email || ''
-      userEmail = email
-      localStorage.setItem(USER_EMAIL_KEY, email)
-      console.log('Firebase Auth: signed in as', email)
-      if (callback) callback(email)
-    })
-    .catch((err) => {
-      console.error('Sign-in failed:', err?.code, err?.message)
-    })
+function handleAuthResult(result: any, callback?: (email: string) => void) {
+  const credential = GoogleAuthProvider.credentialFromResult(result)
+  if (credential?.accessToken) {
+    accessToken = credential.accessToken
+    const expiryTime = Date.now() + 55 * 60 * 1000
+    localStorage.setItem(TOKEN_KEY, credential.accessToken)
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+  }
+  const email = result.user.email || ''
+  userEmail = email
+  localStorage.setItem(USER_EMAIL_KEY, email)
+  console.log('Firebase Auth: signed in as', email)
+  if (callback) callback(email)
 }
 
-// Re-open sign-in popup to get a fresh Calendar access token
+// Sign in with Google — uses redirect in PWA mode, popup in browser
+export function signIn(callback?: (email: string) => void) {
+  if (isPWA()) {
+    // Store that we're waiting for a redirect result
+    sessionStorage.setItem('thoughtful-auth-redirect', '1')
+    signInWithRedirect(auth, googleProvider)
+  } else {
+    signInWithPopup(auth, googleProvider)
+      .then((result) => handleAuthResult(result, callback))
+      .catch((err) => console.error('Sign-in failed:', err?.code, err?.message))
+  }
+}
+
+// Call on page load to handle the result of a redirect sign-in (PWA mode)
+export async function checkRedirectResult(callback?: (email: string) => void): Promise<void> {
+  if (!sessionStorage.getItem('thoughtful-auth-redirect')) return
+  try {
+    const result = await getRedirectResult(auth)
+    if (result) {
+      sessionStorage.removeItem('thoughtful-auth-redirect')
+      handleAuthResult(result, callback)
+    }
+  } catch (err: any) {
+    console.error('Redirect sign-in failed:', err?.code, err?.message)
+    sessionStorage.removeItem('thoughtful-auth-redirect')
+  }
+}
+
+// Re-open sign-in to get a fresh Calendar access token
 // (used by the "Reconnect Calendar" button)
 export function tryRefreshToken(onRefresh: () => void): void {
   signIn((_email) => onRefresh())

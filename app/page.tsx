@@ -15,6 +15,7 @@ import {
   signOut,
   isSignedIn,
   tryRefreshToken,
+  checkRedirectResult,
   getUserEmail,
   getRemindersKey,
   createCalendarEvent,
@@ -140,6 +141,16 @@ export default function Home() {
       setSignedIn(true)
       setUserEmail(getUserEmail())
     }
+
+    // Handle redirect sign-in result (PWA mode)
+    checkRedirectResult((email) => {
+      setSignedIn(true)
+      setCalendarConnected(true)
+      setUserEmail(email)
+      setStatus(`Signed in as ${email}`)
+      setTimeout(() => setStatus(null), 2000)
+      getOrCreateThoughtfulCalendar().catch(() => {})
+    })
   }, [])
 
   // Load reminders when user changes or on mount

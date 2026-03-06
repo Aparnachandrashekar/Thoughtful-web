@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Script from 'next/script'
+import { signInAnonymously } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import ReminderInput from '@/components/ReminderInput'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
@@ -14,7 +17,6 @@ import {
   signIn,
   signOut,
   isSignedIn,
-  checkRedirectResult,
   getUserEmail,
   getRemindersKey,
   createCalendarEvent,
@@ -130,10 +132,9 @@ export default function Home() {
       setUserEmail(storedEmail)
     }
 
-    // Init Google auth (restores cached token, no script needed)
+    // Init GIS auth (restores cached token from localStorage)
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
     initGoogleAuth(clientId)
-    setGoogleReady(true)
     const tokenValid = isSignedIn()
     setCalendarConnected(tokenValid)
     if (tokenValid && !storedEmail) {
@@ -141,20 +142,11 @@ export default function Home() {
       setUserEmail(getUserEmail())
     }
 
-    // Handle redirect sign-in result
-    checkRedirectResult(
-      (email) => {
-        setSignedIn(true)
-        setCalendarConnected(true)
-        setUserEmail(email)
-        setStatus(`Signed in as ${email}`)
-        setTimeout(() => setStatus(null), 3000)
-        getOrCreateThoughtfulCalendar().catch(() => {})
-      },
-      (errMsg) => {
-        setStatus(`Sign-in error: ${errMsg}`)
-        setTimeout(() => setStatus(null), 6000)
-      }
+    // Sign in to Firebase anonymously for Firestore access.
+    // This replaces the broken signInWithCredential(GIS token) approach —
+    // anonymous auth gives Firestore a valid request.auth without any popup or redirect.
+    signInAnonymously(auth).catch((err) =>
+      console.warn('Anonymous Firebase auth failed (Firestore sync may not work):', err?.code)
     )
   }, [])
 
@@ -754,6 +746,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
+      {/* GIS script — sets googleReady when loaded */}
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => setGoogleReady(true)}
+      />
       {/* Profiles Sidebar — always overlay, never pushes content */}
       {signedIn && (
         <RelationshipsSidebar

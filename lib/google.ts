@@ -1,17 +1,10 @@
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, inMemoryPersistence, browserLocalPersistence, setPersistence } from 'firebase/auth'
-import { auth } from './firebase'
-
-// In PWA standalone mode, signInWithPopup opens a new Safari tab and never returns — use redirect instead
-function isPWA(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true
-}
+// Google Identity Services (GIS) for Calendar OAuth token.
+// Firebase Auth is NOT used here — Firestore uses anonymous auth (see app/page.tsx).
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
-// Bump this string whenever OAuth scopes change — forces existing users to re-auth
-const SCOPE_VERSION = 'calendar.events-v1'
+// Bump this string whenever the auth method or scopes change — forces re-auth for all users
+const SCOPE_VERSION = 'gis-v1'
 const SCOPE_VERSION_KEY = 'thoughtful-scope-version'
 
 export let accessToken: string | null = null
@@ -23,25 +16,21 @@ const USER_EMAIL_KEY = 'thoughtful-google-email'
 const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
 
 let thoughtfulCalendarId: string | null = null
+let gisClientId: string | null = null
 
-const googleProvider = new GoogleAuthProvider()
-googleProvider.addScope('https://www.googleapis.com/auth/calendar.events')
-googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email')
-googleProvider.setCustomParameters({ prompt: 'consent' })
-
-// Restore cached token on init. If scopes changed since last login, clear the
-// old token so the user is prompted to re-auth with the new scopes.
-export function initGoogleAuth(_clientId: string) {
+// Restore cached token on init. Clears stale tokens if auth method changed.
+export function initGoogleAuth(clientId: string) {
   if (typeof window === 'undefined') return
+  gisClientId = clientId
 
-  // Scope migration: clear stale token whenever scopes change
+  // If auth method changed (e.g. Firebase Auth → GIS), clear old tokens
   const storedScopeVersion = localStorage.getItem(SCOPE_VERSION_KEY)
   if (storedScopeVersion !== SCOPE_VERSION) {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(TOKEN_EXPIRY_KEY)
     localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
     localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
-    // Keep USER_EMAIL_KEY so user data (reminders/people) still loads
+    // Keep USER_EMAIL_KEY so existing reminders/people still load
   }
 
   const savedToken = localStorage.getItem(TOKEN_KEY)
@@ -62,62 +51,54 @@ export function initGoogleAuth(_clientId: string) {
   }
 }
 
-function handleAuthResult(result: any, callback?: (email: string) => void) {
-  const credential = GoogleAuthProvider.credentialFromResult(result)
-  console.log('handleAuthResult: credential present:', !!credential, 'accessToken present:', !!credential?.accessToken)
-  if (credential?.accessToken) {
-    accessToken = credential.accessToken
-    const expiryTime = Date.now() + 55 * 60 * 1000
-    localStorage.setItem(TOKEN_KEY, credential.accessToken)
-    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
-    localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
-  } else {
-    console.warn('handleAuthResult: no accessToken in credential — calendar will not work')
-  }
-  const email = result.user.email || ''
-  userEmail = email
-  localStorage.setItem(USER_EMAIL_KEY, email)
-  console.log('Firebase Auth: signed in as', email, '| calendarToken:', !!accessToken)
-  if (callback) callback(email)
-}
-
-// Sign in with Google.
-// - Browser mode: inMemoryPersistence + signInWithPopup
-//   inMemoryPersistence stops Firebase creating a firebaseapp.com iframe,
-//   which Safari blocks cross-origin. We manage our own token in localStorage.
-// - PWA mode: browserLocalPersistence + signInWithRedirect
-//   Redirect needs localStorage persistence so auth state survives the page navigation.
+// Sign in with Google using GIS token client.
+// Opens a Google OAuth popup — no Firebase, no cross-origin iframes.
 export function signIn(callback?: (email: string) => void) {
-  if (isPWA()) {
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => signInWithRedirect(auth, googleProvider))
-      .catch((err) => console.error('Sign-in redirect failed:', err))
-  } else {
-    setPersistence(auth, inMemoryPersistence)
-      .then(() => signInWithPopup(auth, googleProvider))
-      .then((result) => handleAuthResult(result, callback))
-      .catch((err) => console.error('Sign-in failed:', err?.code, err?.message))
+  const google = (window as any).google
+  if (!google?.accounts?.oauth2) {
+    console.error('GIS script not loaded yet')
+    return
   }
-}
+  if (!gisClientId) {
+    console.error('Google client ID not set')
+    return
+  }
 
-// Call on page load to handle the result of a redirect sign-in.
-// sessionStorage is cleared by cross-origin redirects so we cannot use it as a guard —
-// getRedirectResult safely returns null when there is no pending redirect.
-export async function checkRedirectResult(
-  callback?: (email: string) => void,
-  onError?: (msg: string) => void
-): Promise<void> {
-  try {
-    console.log('checkRedirectResult: calling getRedirectResult...')
-    const result = await getRedirectResult(auth)
-    console.log('checkRedirectResult: result =', result ? `user=${result.user?.email}` : 'null')
-    if (result) {
-      handleAuthResult(result, callback)
-    }
-  } catch (err: any) {
-    console.error('Redirect sign-in failed:', err?.code, err?.message)
-    if (onError) onError(err?.message || err?.code || 'Sign-in failed')
-  }
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: gisClientId,
+    scope: SCOPES,
+    callback: async (response: any) => {
+      if (response.error) {
+        console.error('GIS auth error:', response.error)
+        return
+      }
+      if (!response.access_token) return
+
+      accessToken = response.access_token
+      const expiryTime = Date.now() + 55 * 60 * 1000
+      localStorage.setItem(TOKEN_KEY, response.access_token)
+      localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+      localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+
+      // Fetch user email via userinfo API
+      try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', {
+          headers: { Authorization: `Bearer ${response.access_token}` },
+        })
+        const info = await res.json()
+        if (info.email) {
+          userEmail = info.email
+          localStorage.setItem(USER_EMAIL_KEY, info.email)
+          console.log('GIS: signed in as', info.email)
+          if (callback) callback(info.email)
+        }
+      } catch (e) {
+        console.error('GIS: failed to get user email:', e)
+      }
+    },
+  })
+
+  tokenClient.requestAccessToken({ prompt: 'consent' })
 }
 
 // Clear the Calendar access token — called when a 401/403 is detected so the
@@ -131,10 +112,14 @@ export function clearCalendarToken() {
 }
 
 export function signOut() {
+  const token = accessToken
   clearCalendarToken()
   userEmail = null
   localStorage.removeItem(USER_EMAIL_KEY)
-  firebaseSignOut(auth).catch(() => {})
+  // Revoke the Google OAuth token so the user is fully signed out
+  if (token && (window as any).google?.accounts?.oauth2) {
+    ;(window as any).google.accounts.oauth2.revoke(token, () => {})
+  }
 }
 
 export function isSignedIn(): boolean {
@@ -227,8 +212,7 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
 }
 
 // Returns the calendar ID to use for events.
-// Uses the cached "Thoughtful" calendar ID if available (from a previous session
-// that had calendar creation scope), otherwise falls back to 'primary'.
+// Uses cached "Thoughtful" calendar ID if available, otherwise falls back to 'primary'.
 // Does NOT make API calls — calendar.events scope doesn't allow calendar management.
 export async function getOrCreateThoughtfulCalendar(): Promise<string> {
   if (thoughtfulCalendarId) return thoughtfulCalendarId
@@ -241,7 +225,6 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
     }
   }
 
-  // No cached calendar ID — use primary
   throw new Error('No Thoughtful calendar cached, falling back to primary')
 }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'thoughtful-v3'
+const CACHE_NAME = 'thoughtful-v4'
 
 const PRECACHE_URLS = [
   '/',
@@ -39,7 +39,13 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Never cache API routes or non-GET requests
+  // Never intercept cross-origin requests (e.g. Google Calendar API, googleapis.com)
+  // Let the browser handle them directly to avoid Safari service worker fetch failures
+  if (url.origin !== self.location.origin) {
+    return
+  }
+
+  // Never cache internal API routes or non-GET requests
   if (request.method !== 'GET' || url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request))
     return

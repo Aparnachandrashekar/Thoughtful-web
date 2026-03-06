@@ -73,22 +73,20 @@ function handleAuthResult(result: any, callback?: (email: string) => void) {
 
 // Sign in with Google — always uses redirect (popup blocked by Safari cross-origin policy)
 export function signIn(_callback?: (email: string) => void) {
-  sessionStorage.setItem('thoughtful-auth-redirect', '1')
   signInWithRedirect(auth, googleProvider)
 }
 
-// Call on page load to handle the result of a redirect sign-in (PWA mode)
+// Call on page load to handle the result of a redirect sign-in.
+// sessionStorage is cleared by cross-origin redirects so we cannot use it as a guard —
+// getRedirectResult safely returns null when there is no pending redirect.
 export async function checkRedirectResult(callback?: (email: string) => void): Promise<void> {
-  if (!sessionStorage.getItem('thoughtful-auth-redirect')) return
   try {
     const result = await getRedirectResult(auth)
     if (result) {
-      sessionStorage.removeItem('thoughtful-auth-redirect')
       handleAuthResult(result, callback)
     }
   } catch (err: any) {
     console.error('Redirect sign-in failed:', err?.code, err?.message)
-    sessionStorage.removeItem('thoughtful-auth-redirect')
   }
 }
 

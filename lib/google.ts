@@ -10,6 +10,10 @@ function isPWA(): boolean {
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
+// Bump this string whenever OAuth scopes change — forces existing users to re-auth
+const SCOPE_VERSION = 'calendar.events-v1'
+const SCOPE_VERSION_KEY = 'thoughtful-scope-version'
+
 export let accessToken: string | null = null
 export let userEmail: string | null = null
 
@@ -20,15 +24,25 @@ const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
 
 let thoughtfulCalendarId: string | null = null
 
-// Google provider with Calendar scope — Firebase Auth handles the OAuth flow
 const googleProvider = new GoogleAuthProvider()
 googleProvider.addScope('https://www.googleapis.com/auth/calendar.events')
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email')
 googleProvider.setCustomParameters({ prompt: 'consent' })
 
-// Restore cached token on init (no GIS script needed)
+// Restore cached token on init. If scopes changed since last login, clear the
+// old token so the user is prompted to re-auth with the new scopes.
 export function initGoogleAuth(_clientId: string) {
   if (typeof window === 'undefined') return
+
+  // Scope migration: clear stale token whenever scopes change
+  const storedScopeVersion = localStorage.getItem(SCOPE_VERSION_KEY)
+  if (storedScopeVersion !== SCOPE_VERSION) {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+    localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
+    localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+    // Keep USER_EMAIL_KEY so user data (reminders/people) still loads
+  }
 
   const savedToken = localStorage.getItem(TOKEN_KEY)
   const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
@@ -55,6 +69,7 @@ function handleAuthResult(result: any, callback?: (email: string) => void) {
     const expiryTime = Date.now() + 55 * 60 * 1000
     localStorage.setItem(TOKEN_KEY, credential.accessToken)
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+    localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
   }
   const email = result.user.email || ''
   userEmail = email
@@ -66,7 +81,6 @@ function handleAuthResult(result: any, callback?: (email: string) => void) {
 // Sign in with Google — uses redirect in PWA mode, popup in browser
 export function signIn(callback?: (email: string) => void) {
   if (isPWA()) {
-    // Store that we're waiting for a redirect result
     sessionStorage.setItem('thoughtful-auth-redirect', '1')
     signInWithRedirect(auth, googleProvider)
   } else {
@@ -92,19 +106,24 @@ export async function checkRedirectResult(callback?: (email: string) => void): P
 }
 
 // Re-open sign-in to get a fresh Calendar access token
-// (used by the "Reconnect Calendar" button)
 export function tryRefreshToken(onRefresh: () => void): void {
   signIn((_email) => onRefresh())
 }
 
-export function signOut() {
+// Clear the Calendar access token — called when a 401/403 is detected so the
+// UI can immediately show the "Reconnect Calendar" button
+export function clearCalendarToken() {
   accessToken = null
-  userEmail = null
   thoughtfulCalendarId = null
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(TOKEN_EXPIRY_KEY)
-  localStorage.removeItem(USER_EMAIL_KEY)
   localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
+}
+
+export function signOut() {
+  clearCalendarToken()
+  userEmail = null
+  localStorage.removeItem(USER_EMAIL_KEY)
   firebaseSignOut(auth).catch(() => {})
 }
 
@@ -161,24 +180,12 @@ export interface RecurrenceOptions {
 function buildRecurrenceRule(options: RecurrenceOptions): string[] | undefined {
   if (!options.type) return undefined
 
-  const freqMap = {
-    yearly: 'YEARLY',
-    monthly: 'MONTHLY',
-    weekly: 'WEEKLY',
-    daily: 'DAILY'
-  }
-
+  const freqMap = { yearly: 'YEARLY', monthly: 'MONTHLY', weekly: 'WEEKLY', daily: 'DAILY' }
   let rule = `RRULE:FREQ=${freqMap[options.type]}`
 
-  if (options.interval && options.interval > 1) {
-    rule += `;INTERVAL=${options.interval}`
-  }
-  if (options.byDay) {
-    rule += `;BYDAY=${options.byDay}`
-  }
-  if (options.byMonthDay) {
-    rule += `;BYMONTHDAY=${options.byMonthDay}`
-  }
+  if (options.interval && options.interval > 1) rule += `;INTERVAL=${options.interval}`
+  if (options.byDay) rule += `;BYDAY=${options.byDay}`
+  if (options.byMonthDay) rule += `;BYMONTHDAY=${options.byMonthDay}`
   if (options.bySetPos && options.byDay) {
     rule = rule.replace(`;BYDAY=${options.byDay}`, `;BYDAY=${options.bySetPos}${options.byDay}`)
   }
@@ -209,6 +216,10 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
+// Returns the calendar ID to use for events.
+// Uses the cached "Thoughtful" calendar ID if available (from a previous session
+// that had calendar creation scope), otherwise falls back to 'primary'.
+// Does NOT make API calls — calendar.events scope doesn't allow calendar management.
 export async function getOrCreateThoughtfulCalendar(): Promise<string> {
   if (thoughtfulCalendarId) return thoughtfulCalendarId
 
@@ -220,49 +231,16 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
     }
   }
 
-  if (!accessToken) throw new Error('Not signed in')
+  // No cached calendar ID — use primary
+  throw new Error('No Thoughtful calendar cached, falling back to primary')
+}
 
-  try {
-    const listRes = await fetchWithTimeout(
-      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    if (listRes.ok) {
-      const listData = await listRes.json()
-      const existing = (listData.items as any[])?.find((c: any) => c.summary === 'Thoughtful')
-      if (existing?.id) {
-        thoughtfulCalendarId = existing.id
-        if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, existing.id)
-        return existing.id
-      }
-    }
-  } catch {}
-
-  const createRes = await fetchWithTimeout(
-    'https://www.googleapis.com/calendar/v3/calendars',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        summary: 'Thoughtful',
-        description: 'Reminders created by Thoughtful',
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      }),
-    }
-  )
-
-  if (!createRes.ok) {
-    const err = await createRes.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Failed to create Thoughtful calendar (${createRes.status})`)
-  }
-
-  const calData = await createRes.json()
-  thoughtfulCalendarId = calData.id
-  if (typeof window !== 'undefined') localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, calData.id)
-  return calData.id
+// Detect auth/permission errors from Calendar API responses
+function isAuthError(status: number, message: string): boolean {
+  return status === 401 || status === 403 ||
+    message.toLowerCase().includes('unauthorized') ||
+    message.toLowerCase().includes('forbidden') ||
+    message.toLowerCase().includes('insufficient')
 }
 
 export async function createCalendarEvent(event: {
@@ -277,8 +255,6 @@ export async function createCalendarEvent(event: {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const startDate = new Date(event.date)
   const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
-  const startDateTime = toLocalISOString(startDate)
-  const endDateTime = toLocalISOString(endDate)
 
   const reminders = event.recurrence?.isBirthday || event.recurrence?.isAnniversary
     ? { useDefault: false, overrides: [{ method: 'popup', minutes: 1440 }, { method: 'popup', minutes: 0 }] }
@@ -286,8 +262,8 @@ export async function createCalendarEvent(event: {
 
   const eventBody: Record<string, unknown> = {
     summary: event.title,
-    start: { dateTime: startDateTime, timeZone },
-    end: { dateTime: endDateTime, timeZone },
+    start: { dateTime: toLocalISOString(startDate), timeZone },
+    end: { dateTime: toLocalISOString(endDate), timeZone },
     reminders,
   }
 
@@ -322,7 +298,9 @@ export async function createCalendarEvent(event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Calendar API error (${res.status})`)
+    const msg = err.error?.message || `Calendar API error (${res.status})`
+    if (isAuthError(res.status, msg)) clearCalendarToken()
+    throw new Error(msg)
   }
 
   return res.json()
@@ -351,7 +329,9 @@ export async function updateCalendarEvent(eventId: string, event: { title: strin
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Calendar update failed (${res.status})`)
+    const msg = err.error?.message || `Calendar update failed (${res.status})`
+    if (isAuthError(res.status, msg)) clearCalendarToken()
+    throw new Error(msg)
   }
 
   return res.json()
@@ -368,7 +348,9 @@ export async function getCalendarEvent(eventId: string): Promise<any> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Calendar get failed (${res.status})`)
+    const msg = err.error?.message || `Calendar get failed (${res.status})`
+    if (isAuthError(res.status, msg)) clearCalendarToken()
+    throw new Error(msg)
   }
 
   return res.json()
@@ -379,10 +361,15 @@ export async function deleteCalendarEvent(eventId: string) {
 
   try {
     const calendarId = await getOrCreateThoughtfulCalendar().catch(() => 'primary')
-    await fetchWithTimeout(
+    const res = await fetchWithTimeout(
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
     )
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err.error?.message || ''
+      if (isAuthError(res.status, msg)) clearCalendarToken()
+    }
   } catch {
     // Deletion is best-effort
   }

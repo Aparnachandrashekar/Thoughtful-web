@@ -259,6 +259,17 @@ export default function Home() {
     }
   }, [userEmail])
 
+  // Periodically check token validity and update calendarConnected
+  // Token expires after ~55 min — this ensures the UI reflects expiry promptly
+  useEffect(() => {
+    if (!signedIn) return
+    const interval = setInterval(() => {
+      const valid = isSignedIn()
+      setCalendarConnected(valid)
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [signedIn])
+
   // Listen for notification permission being blocked (e.g. incognito)
   useEffect(() => {
     const handler = () => setNotificationsBlocked(true)
@@ -532,6 +543,8 @@ export default function Home() {
         setTimeout(() => setStatus(null), 3000)
       } catch (e) {
         console.error('Calendar sync failed:', e)
+        // If token expired, update UI immediately so Reconnect Calendar button appears
+        if (!isSignedIn()) setCalendarConnected(false)
         setStatus('Saved locally (calendar sync failed)')
         setTimeout(() => setStatus(null), 3000)
       }

@@ -14,7 +14,6 @@ import {
   signIn,
   signOut,
   isSignedIn,
-  tryRefreshToken,
   checkRedirectResult,
   getUserEmail,
   getRemindersKey,

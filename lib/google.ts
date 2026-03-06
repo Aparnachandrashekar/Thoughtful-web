@@ -1,12 +1,5 @@
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut } from 'firebase/auth'
 import { auth } from './firebase'
-
-// In PWA standalone mode, signInWithPopup doesn't work on iOS — use redirect instead
-function isPWA(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true
-}
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
@@ -78,16 +71,10 @@ function handleAuthResult(result: any, callback?: (email: string) => void) {
   if (callback) callback(email)
 }
 
-// Sign in with Google — uses redirect in PWA mode, popup in browser
-export function signIn(callback?: (email: string) => void) {
-  if (isPWA()) {
-    sessionStorage.setItem('thoughtful-auth-redirect', '1')
-    signInWithRedirect(auth, googleProvider)
-  } else {
-    signInWithPopup(auth, googleProvider)
-      .then((result) => handleAuthResult(result, callback))
-      .catch((err) => console.error('Sign-in failed:', err?.code, err?.message))
-  }
+// Sign in with Google — always uses redirect (popup blocked by Safari cross-origin policy)
+export function signIn(_callback?: (email: string) => void) {
+  sessionStorage.setItem('thoughtful-auth-redirect', '1')
+  signInWithRedirect(auth, googleProvider)
 }
 
 // Call on page load to handle the result of a redirect sign-in (PWA mode)
@@ -103,11 +90,6 @@ export async function checkRedirectResult(callback?: (email: string) => void): P
     console.error('Redirect sign-in failed:', err?.code, err?.message)
     sessionStorage.removeItem('thoughtful-auth-redirect')
   }
-}
-
-// Re-open sign-in to get a fresh Calendar access token
-export function tryRefreshToken(onRefresh: () => void): void {
-  signIn((_email) => onRefresh())
 }
 
 // Clear the Calendar access token — called when a 401/403 is detected so the

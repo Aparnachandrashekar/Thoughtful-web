@@ -151,6 +151,13 @@ export default function Home() {
       setUserEmail(getUserEmail())
     }
 
+    // Backfill lastSignInTime for users who were already signed in before this key existed.
+    // Without this, the 90-day "don't show Reconnect Calendar" window never applies
+    // to existing sessions and the button always appears after a token refresh failure.
+    if (storedEmail && !localStorage.getItem('thoughtful-last-signin')) {
+      localStorage.setItem('thoughtful-last-signin', Date.now().toString())
+    }
+
     // If GIS script is already loaded (e.g. after back navigation), set googleReady immediately
     if ((window as any).google?.accounts?.oauth2) {
       setGoogleReady(true)

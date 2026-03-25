@@ -43,14 +43,16 @@ export default function WhatsAppButton({ phone, className = '' }: WhatsAppButton
     )
   }
 
-  // Use window.open instead of <a target="_blank"> to avoid polluting the PWA
-  // back-stack — opening via window.open creates a fresh browser tab so the
-  // PWA stays on-screen and the back gesture returns correctly.
-  const url = `https://wa.me/${phone}?text=${encodeURIComponent('Hey!')}`
+  // Use the whatsapp:// URI scheme (deep link) instead of wa.me web URL.
+  // In a standalone PWA, window.open/_blank doesn't open a new tab — it navigates
+  // the current WebView, so back returns to blank. The whatsapp:// intent scheme
+  // tells Android/iOS to open WhatsApp directly without navigating the PWA at all.
+  // When the user presses back in WhatsApp, they return to the PWA as-is.
+  const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent('Hey!')}`
 
   return (
     <button
-      onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+      onClick={() => { window.location.href = url }}
       className={`${baseClass} text-terra/40 hover:text-green-600 hover:bg-green-50 ${className}`}
       title="Send via WhatsApp"
     >

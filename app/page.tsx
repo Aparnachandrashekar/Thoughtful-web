@@ -72,6 +72,7 @@ export default function Home() {
   const [calendarConnected, setCalendarConnected] = useState(false)
   // True while a silent token refresh is in flight — hides the "Reconnect Calendar" button during the attempt
   const [refreshingCalendar, setRefreshingCalendar] = useState(false)
+  const [firebaseReady, setFirebaseReady] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [gcalUpdates, setGcalUpdates] = useState<Array<{ id: string; text: string; change: string }>>([])
@@ -171,6 +172,15 @@ export default function Home() {
       }
     }
 
+    // Sign in to Firebase anonymously so Firestore security rules (request.auth != null) pass.
+    // Must run before the Firestore sync effect — setFirebaseReady(true) gates that effect.
+    signInAnonymously(auth)
+      .then(() => setFirebaseReady(true))
+      .catch((err) => {
+        console.warn('Anonymous Firebase auth failed (Firestore sync may not work):', err?.code)
+        setFirebaseReady(true) // Still unblock sync — Firestore calls will fail gracefully
+      })
+
     // Reload React state when returning from an external app (e.g. WhatsApp) via back gesture.
     // PWA back-navigation can serve the page from BFCache with a stale React tree.
     const onPageShow = (e: PageTransitionEvent) => {
@@ -178,13 +188,6 @@ export default function Home() {
     }
     window.addEventListener('pageshow', onPageShow)
     return () => window.removeEventListener('pageshow', onPageShow)
-
-    // Sign in to Firebase anonymously for Firestore access.
-    // This replaces the broken signInWithCredential(GIS token) approach —
-    // anonymous auth gives Firestore a valid request.auth without any popup or redirect.
-    signInAnonymously(auth).catch((err) =>
-      console.warn('Anonymous Firebase auth failed (Firestore sync may not work):', err?.code)
-    )
   }, [])
 
   // Load reminders when user changes or on mount
@@ -377,11 +380,12 @@ export default function Home() {
     }
   }, [reminders, mounted, saveReminders])
 
-  // Sync with Firestore: pull first (for new devices), then push, then reload UI
+  // Sync with Firestore: pull first (for new devices), then push, then reload UI.
+  // Gated on firebaseReady so anonymous auth is established before any Firestore call.
   const engineStarted = useRef(false)
   useEffect(() => {
-    if (userEmail) {
-      // Pull from Firestore first (populates localStorage on new devices),
+    if (userEmail && firebaseReady) {
+      // Pull from Firestore first (restores data on this device if localStorage was cleared),
       // then push any local-only data, then reload UI state
       pullFromFirestore(userEmail)
         .then(({ reminders, people }) => {
@@ -404,7 +408,7 @@ export default function Home() {
       stopReminderEngine()
       engineStarted.current = false
     }
-  }, [userEmail, loadReminders])
+  }, [userEmail, firebaseReady, loadReminders])
 
   const handleGoogleSignIn = () => {
     signIn((email) => {

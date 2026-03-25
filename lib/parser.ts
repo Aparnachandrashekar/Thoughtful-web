@@ -436,8 +436,7 @@ function extractTitle(text: string): string {
     // Time patterns
     .replace(/\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/gi, '')
     .replace(/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/gi, '')
-    // Relative dates
-    .replace(/\b(today|tonight|tomorrow|yesterday)\b/gi, '')
+    // Relative dates (keep today/tomorrow/yesterday as they may be part of the title)
     .replace(/\b(this|next|last)\s+(week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, '')
     // Specific dates
     .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(st|nd|rd|th)?(,?\s+\d{4})?\b/gi, '')
@@ -485,7 +484,9 @@ function tryChronoParse(text: string): { date: Date; hasTime: boolean } | null {
   let date = result.start.date()
 
   if (!hasTime) {
-    date.setHours(8, 0, 0, 0)
+    // Default to 10 minutes from now when no explicit time was given
+    const tenMins = new Date(Date.now() + 10 * 60 * 1000)
+    date.setHours(tenMins.getHours(), tenMins.getMinutes(), 0, 0)
   } else {
     const fixed = fixAmbiguousHour(date, hasExplicitMeridiem)
     date = fixed.date

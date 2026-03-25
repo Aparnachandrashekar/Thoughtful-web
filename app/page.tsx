@@ -24,6 +24,7 @@ import {
   deleteCalendarEvent,
   getCalendarEvent,
   getOrCreateThoughtfulCalendar,
+  trySilentRefresh,
   RecurrenceOptions,
   getStoredEmail
 } from '@/lib/google'
@@ -69,6 +70,8 @@ export default function Home() {
   const [googleReady, setGoogleReady] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
   const [calendarConnected, setCalendarConnected] = useState(false)
+  // True while a silent token refresh is in flight — hides the "Reconnect Calendar" button during the attempt
+  const [refreshingCalendar, setRefreshingCalendar] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [gcalUpdates, setGcalUpdates] = useState<Array<{ id: string; text: string; change: string }>>([])
@@ -116,6 +119,12 @@ export default function Home() {
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [notificationsBlocked, setNotificationsBlocked] = useState(false)
 
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const touchStartY = useRef(0)
+  const PULL_THRESHOLD = 72
+
   // Save reminders for current user
   const saveReminders = useCallback((newReminders: Reminder[]) => {
     const key = getRemindersKey()
@@ -141,6 +150,27 @@ export default function Home() {
       setSignedIn(true)
       setUserEmail(getUserEmail())
     }
+
+    // If GIS script is already loaded (e.g. after back navigation), set googleReady immediately
+    if ((window as any).google?.accounts?.oauth2) {
+      setGoogleReady(true)
+      // Proactively refresh expired token on app open so calendar sync just works
+      if (!tokenValid && storedEmail) {
+        setRefreshingCalendar(true)
+        trySilentRefresh().then(ok => {
+          if (ok) setCalendarConnected(true)
+          setRefreshingCalendar(false)
+        })
+      }
+    }
+
+    // Reload React state when returning from an external app (e.g. WhatsApp) via back gesture.
+    // PWA back-navigation can serve the page from BFCache with a stale React tree.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) window.location.reload()
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
 
     // Sign in to Firebase anonymously for Firestore access.
     // This replaces the broken signInWithCredential(GIS token) approach —
@@ -256,16 +286,23 @@ export default function Home() {
     }
   }, [userEmail])
 
-  // Periodically check token validity and update calendarConnected
-  // Token expires after ~55 min — this ensures the UI reflects expiry promptly
+  // Periodically check token validity; silently refresh before showing Reconnect button
   useEffect(() => {
     if (!signedIn) return
     const interval = setInterval(() => {
       const valid = isSignedIn()
-      setCalendarConnected(valid)
+      if (!valid && googleReady) {
+        setRefreshingCalendar(true)
+        trySilentRefresh().then(ok => {
+          setCalendarConnected(ok)
+          setRefreshingCalendar(false)
+        })
+      } else {
+        setCalendarConnected(valid)
+      }
     }, 60_000)
     return () => clearInterval(interval)
-  }, [signedIn])
+  }, [signedIn, googleReady])
 
   // Listen for notification permission being blocked (e.g. incognito)
   useEffect(() => {
@@ -280,6 +317,14 @@ export default function Home() {
       if (document.visibilityState === 'hidden') {
         lastGcalCheck.current = 0  // reset so returning always triggers a fresh check
       } else if (document.visibilityState === 'visible') {
+        // Proactively refresh expired token when user returns to the tab
+        if (!isSignedIn() && getStoredEmail() && (window as any).google?.accounts?.oauth2) {
+          setRefreshingCalendar(true)
+          trySilentRefresh().then(ok => {
+            if (ok) setCalendarConnected(true)
+            setRefreshingCalendar(false)
+          })
+        }
         checkForCalendarChanges()
       }
     }
@@ -359,6 +404,8 @@ export default function Home() {
       setSignedIn(true)
       setCalendarConnected(true)
       setUserEmail(email)
+      // Record explicit sign-in time — used to avoid showing "Reconnect Calendar" for 90 days
+      localStorage.setItem('thoughtful-last-signin', Date.now().toString())
       setStatus(`Signed in as ${email}`)
       setTimeout(() => setStatus(null), 2000)
       // Proactively create "Thoughtful" calendar right after sign-in
@@ -416,7 +463,8 @@ export default function Home() {
     let friendlyTitle: string
     if (isUpdate && existingReminder) {
       setStatus(`Updating "${existingReminder.text}"...`)
-      friendlyTitle = existingReminder.text
+      // rawText is the new title from the edit modal; fall back to existing if blank
+      friendlyTitle = rawText.trim() || existingReminder.text
     } else {
       setStatus('Creating reminder...')
       try {
@@ -438,6 +486,18 @@ export default function Home() {
       ? `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hey!')}`
       : undefined
 
+    // When editing, preserve recurrence flags from the existing reminder
+    // (the edit modal only changes title/date, not recurrence pattern)
+    const isRecurring = isUpdate && existingReminder
+      ? (existingReminder.isRecurring ?? !!recurrenceOptions?.type)
+      : !!recurrenceOptions?.type
+    const isBirthday = isUpdate && existingReminder
+      ? existingReminder.isBirthday
+      : recurrenceOptions?.isBirthday
+    const isAnniversary = isUpdate && existingReminder
+      ? existingReminder.isAnniversary
+      : recurrenceOptions?.isAnniversary
+
     const newReminder: Reminder = {
       id,
       text: friendlyTitle,
@@ -447,9 +507,9 @@ export default function Home() {
       calendarHtmlLink: existingReminder?.calendarHtmlLink,
       lastSyncedAt: existingReminder?.lastSyncedAt,
       originalStartTime: existingReminder?.originalStartTime,
-      isRecurring: !!recurrenceOptions?.type,
-      isBirthday: recurrenceOptions?.isBirthday,
-      isAnniversary: recurrenceOptions?.isAnniversary,
+      isRecurring,
+      isBirthday,
+      isAnniversary,
       message,
       personName: detectedPersonName || undefined,
       phoneNumber,
@@ -468,8 +528,15 @@ export default function Home() {
     // Sync reminder to Firestore
     if (userEmail) syncReminderToFirestore(userEmail, newReminder)
 
+    // If token is expired but user was previously signed in, try a silent refresh first
+    let calendarReady = isSignedIn()
+    if (!calendarReady && signedIn && (window as any).google?.accounts?.oauth2) {
+      calendarReady = await trySilentRefresh()
+      if (calendarReady) setCalendarConnected(true)
+    }
+
     // Sync with Google Calendar if signed in
-    if (isSignedIn()) {
+    if (calendarReady) {
       try {
         if (isUpdate && existingReminder?.calendarEventId) {
           await updateCalendarEvent(existingReminder.calendarEventId, {
@@ -546,15 +613,15 @@ export default function Home() {
         setTimeout(() => setStatus(null), 3000)
       }
     } else {
-      setStatus('Saved locally. Sign in to Google for calendar reminders.')
+      setStatus(signedIn ? 'Saved locally (reconnecting calendar…)' : 'Saved locally. Sign in to Google for calendar reminders.')
       setTimeout(() => setStatus(null), 3000)
     }
-  }, [userEmail, refreshPeople])
+  }, [userEmail, refreshPeople, signedIn])
 
   const handleAddReminder = (text: string) => {
-    // Check if this is an update request
+    // Check if this is an update request — must start with "update " to avoid false positives
     const lowerText = text.toLowerCase()
-    const isUpdateRequest = lowerText.includes('update')
+    const isUpdateRequest = /^update\s/i.test(lowerText)
 
     if (isUpdateRequest) {
       // Find matching reminder by keyword
@@ -744,13 +811,67 @@ export default function Home() {
     if (userEmail) deleteReminderFromFirestore(userEmail, id)
   }
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (window.scrollY > 0 || isRefreshing) return
+    const delta = e.touches[0].clientY - touchStartY.current
+    if (delta > 0) setPullDistance(Math.min(delta * 0.5, PULL_THRESHOLD + 20))
+  }
+
+  const handleTouchEnd = async () => {
+    if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
+      setIsRefreshing(true)
+      setPullDistance(0)
+      loadReminders()
+      await checkForCalendarChanges()
+      setIsRefreshing(false)
+    } else {
+      setPullDistance(0)
+    }
+  }
+
   return (
-    <div className="min-h-screen">
+    <div
+      className="min-h-screen"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div
+          className="fixed top-0 inset-x-0 z-50 flex justify-center transition-transform"
+          style={{ transform: `translateY(${isRefreshing ? 16 : pullDistance - 32}px)` }}
+        >
+          <div className={`w-9 h-9 rounded-full bg-white shadow-lg border border-blush-light
+                           flex items-center justify-center
+                           ${isRefreshing ? 'animate-spin' : ''}`}>
+            <svg className="w-4 h-4 text-terra" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+        </div>
+      )}
+
       {/* GIS script — sets googleReady when loaded */}
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
-        onLoad={() => setGoogleReady(true)}
+        onLoad={() => {
+          setGoogleReady(true)
+          // Proactively refresh if the token expired while the GIS script was loading
+          if (!isSignedIn() && getStoredEmail()) {
+            setRefreshingCalendar(true)
+            trySilentRefresh().then(ok => {
+              if (ok) setCalendarConnected(true)
+              setRefreshingCalendar(false)
+            })
+          }
+        }}
       />
       {/* Profiles Sidebar — always overlay, never pushes content */}
       {signedIn && (
@@ -778,20 +899,44 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {googleReady && !calendarConnected && (
+              <div className="flex items-center gap-2">
+                {/* Manual refresh button for PWA — browser refresh unavailable in standalone mode */}
                 <button
-                  onClick={handleGoogleSignIn}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium
-                             text-terra border border-terra/30 hover:bg-blush-pale
-                             transition-all duration-200 active:scale-95"
+                  onClick={() => { loadReminders(); checkForCalendarChanges() }}
+                  className="p-2 text-terra/40 hover:text-terra rounded-xl hover:bg-blush-pale
+                             transition-all duration-150"
+                  title="Refresh"
+                  aria-label="Refresh"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Reconnect Calendar
                 </button>
-              )}
+                {googleReady && !calendarConnected && !refreshingCalendar && (() => {
+                  // Don't show "Reconnect Calendar" within 90 days of last explicit sign-in.
+                  // Silent refresh handles token renewal automatically — only prompt the user
+                  // when the Google session has genuinely expired (i.e. after 3 months).
+                  const lastSignIn = parseInt(localStorage.getItem('thoughtful-last-signin') || '0', 10)
+                  const ninetyDays = 90 * 24 * 60 * 60 * 1000
+                  const recentlySignedIn = lastSignIn > 0 && (Date.now() - lastSignIn) < ninetyDays
+                  if (recentlySignedIn) return null
+                  return (
+                    <button
+                      onClick={handleGoogleSignIn}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium
+                                 text-terra border border-terra/30 hover:bg-blush-pale
+                                 transition-all duration-200 active:scale-95"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 000-2H5a1 1 0 000 2zm0 0v.01" />
+                      </svg>
+                      Reconnect Calendar
+                    </button>
+                  )
+                })()}
+              </div>
             </div>
           )}
 

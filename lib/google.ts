@@ -51,6 +51,7 @@ export function initGoogleAuth(clientId: string) {
     if (Date.now() < expiryTime) {
       accessToken = savedToken
       userEmail = savedEmail
+      scheduleProactiveRefresh(expiryTime)
     } else {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(TOKEN_EXPIRY_KEY)
@@ -88,6 +89,7 @@ export function signIn(callback?: (email: string) => void) {
       localStorage.setItem(TOKEN_KEY, response.access_token)
       localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
       localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+      scheduleProactiveRefresh(expiryTime)
 
       // Fetch user email via userinfo API
       try {
@@ -108,6 +110,59 @@ export function signIn(callback?: (email: string) => void) {
   })
 
   tokenClient.requestAccessToken({ prompt: 'consent' })
+}
+
+// Silently refresh the GIS token using the user's existing Google browser session.
+// Returns a Promise<boolean>: true if a new token was obtained, false otherwise.
+// Uses prompt:'' so Google auto-selects the account without showing UI (if session is valid).
+let silentRefreshInProgress: Promise<boolean> | null = null
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+// Schedule a silent token refresh 8 minutes before expiry.
+// Called whenever a new token is stored so we never go stale mid-session.
+function scheduleProactiveRefresh(expiryTime: number) {
+  if (proactiveRefreshTimer) clearTimeout(proactiveRefreshTimer)
+  const msUntilRefresh = expiryTime - Date.now() - 8 * 60 * 1000 // 8 min before expiry
+  if (msUntilRefresh <= 0) return // already close to expiry — let the reactive path handle it
+  proactiveRefreshTimer = setTimeout(() => {
+    trySilentRefresh()
+  }, msUntilRefresh)
+}
+
+export function trySilentRefresh(): Promise<boolean> {
+  if (silentRefreshInProgress) return silentRefreshInProgress
+  if (typeof window === 'undefined') return Promise.resolve(false)
+
+  const google = (window as any).google
+  if (!google?.accounts?.oauth2 || !gisClientId) return Promise.resolve(false)
+
+  const loginHint = userEmail || localStorage.getItem(USER_EMAIL_KEY) || undefined
+
+  silentRefreshInProgress = new Promise<boolean>((resolve) => {
+    // 10s timeout — GIS round-trips to Google's servers, which can take 3–8s on real connections.
+    // 2s was too short and caused almost every silent refresh to time out before Google responded.
+    const timeout = setTimeout(() => resolve(false), 10_000)
+
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: gisClientId,
+      scope: SCOPES,
+      callback: (response: any) => {
+        clearTimeout(timeout)
+        if (response.error || !response.access_token) return resolve(false)
+        accessToken = response.access_token
+        const expiryTime = Date.now() + 55 * 60 * 1000
+        localStorage.setItem(TOKEN_KEY, response.access_token)
+        localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+        scheduleProactiveRefresh(expiryTime)
+        resolve(true)
+      },
+    })
+    tokenClient.requestAccessToken({ prompt: '', login_hint: loginHint })
+  }).finally(() => {
+    silentRefreshInProgress = null
+  })
+
+  return silentRefreshInProgress
 }
 
 // Clear the Calendar access token — called when a 401/403 is detected so the

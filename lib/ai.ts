@@ -39,8 +39,7 @@ function basicTitleExtraction(text: string): string {
     .replace(/\b(every\s+year|yearly|annual|monthly|weekly|every\s*day|everyday|daily)\b/gi, '')
     .replace(/\b(alternating|every\s+other)\s+\w+s?\b/gi, '')
     .replace(/\buntil\s+.+?(?:\s*$|,|\.|;)/gi, '')
-    // Remove dates/times
-    .replace(/\b(today|tonight|tomorrow|yesterday)\b/gi, '')
+    // Remove dates/times (keep today/tomorrow/yesterday as they may be part of the title)
     .replace(/\b(this|next|last)\s+(week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, '')
     .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(st|nd|rd|th)?(,?\s+\d{4})?\b/gi, '')
     .replace(/\b\d{1,2}(st|nd|rd|th)?\s+(of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\b/gi, '')

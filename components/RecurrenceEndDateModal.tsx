@@ -17,10 +17,10 @@ export default function RecurrenceEndDateModal({
 }: RecurrenceEndDateModalProps) {
   const [selectedOption, setSelectedOption] = useState<'forever' | 'date'>('forever')
 
-  // Default end date to 5 years from now
+  // Default end date to 1 year from now
   const defaultEndDate = () => {
     const d = new Date()
-    d.setFullYear(d.getFullYear() + 5)
+    d.setFullYear(d.getFullYear() + 1)
     return d.toISOString().split('T')[0]
   }
 

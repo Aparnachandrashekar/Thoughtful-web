@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Reminder } from './ReminderList'
+import { getDateBounds } from '@/lib/dateFormat'
 
 interface EditReminderModalProps {
   reminder: Reminder
@@ -15,6 +16,7 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
   const [time, setTime] = useState(
     reminder.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   )
+  const { min: minDate, max: maxDate } = getDateBounds()
 
   const handleConfirm = () => {
     const [year, month, day] = date.split('-').map(Number)
@@ -51,6 +53,8 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
             <input
               type="date"
               value={date}
+              min={minDate}
+              max={maxDate}
               onChange={(e) => setDate(e.target.value)}
               className="w-full px-4 py-3 border-2 border-blush-light focus:border-terra/40
                          rounded-xl outline-none text-terra-deep text-sm"

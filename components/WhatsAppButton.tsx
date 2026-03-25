@@ -43,16 +43,23 @@ export default function WhatsAppButton({ phone, className = '' }: WhatsAppButton
     )
   }
 
-  // Use the whatsapp:// URI scheme (deep link) instead of wa.me web URL.
-  // In a standalone PWA, window.open/_blank doesn't open a new tab — it navigates
-  // the current WebView, so back returns to blank. The whatsapp:// intent scheme
-  // tells Android/iOS to open WhatsApp directly without navigating the PWA at all.
-  // When the user presses back in WhatsApp, they return to the PWA as-is.
-  const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent('Hey!')}`
+  // Use a hidden iframe to trigger the whatsapp:// deep link.
+  // On iOS PWA (WKWebView), window.location.href = 'whatsapp://' causes the WebView
+  // to attempt navigation and go blank when iOS intercepts it. An iframe src change
+  // triggers the app intent without touching the main page's navigation stack,
+  // so the PWA stays intact when the user returns from WhatsApp.
+  const openWhatsApp = () => {
+    const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent('Hey!')}`
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = url
+    document.body.appendChild(iframe)
+    setTimeout(() => document.body.removeChild(iframe), 2000)
+  }
 
   return (
     <button
-      onClick={() => { window.location.href = url }}
+      onClick={openWhatsApp}
       className={`${baseClass} text-terra/40 hover:text-green-600 hover:bg-green-50 ${className}`}
       title="Send via WhatsApp"
     >

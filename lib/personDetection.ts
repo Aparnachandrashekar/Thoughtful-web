@@ -70,23 +70,17 @@ export function detectNamesInText(text: string): DetectedName[] {
         /^[A-Z][a-z]+$/.test(cleanWord) &&
         !EXCLUSION_LIST.has(lowerWord)) {
 
-      // Skip if it's the first word (might just be sentence start)
-      // unless surrounded by context words (before or after the name)
-      const isFirstWord = i === 0 || /[.!?]$/.test(words[i - 1] || '')
-      const nextWordClean = (words[i + 1] || '').toLowerCase().replace(/[^a-z]/g, '')
-      const hasContext = word.includes("'s") ||
-                         /^(call|text|meet|visit|see|for|with)$/i.test(words[i - 1] || '') ||
-                         /^(birthday|appointment|meeting|reminder|call|dinner|lunch|coffee|catchup|meetup|visit|gift|present|party|event|anniversary|drinks|brunch|hangout)$/i.test(nextWordClean)
-
-      if (!isFirstWord || hasContext) {
-        if (!seenNames.has(lowerWord)) {
-          seenNames.add(lowerWord)
-          detectedNames.push({
-            name: cleanWord,
-            confidence: 'medium',
-            source: 'proper'
-          })
-        }
+      // Detect any properly-cased word not in the exclusion list.
+      // The exclusion list (days, months, common verbs) is the real guard against
+      // false positives — the old isFirstWord check was blocking names like
+      // "Aparna tomorrow" where the name legitimately starts the phrase.
+      if (!seenNames.has(lowerWord)) {
+        seenNames.add(lowerWord)
+        detectedNames.push({
+          name: cleanWord,
+          confidence: 'medium',
+          source: 'proper'
+        })
       }
     }
 

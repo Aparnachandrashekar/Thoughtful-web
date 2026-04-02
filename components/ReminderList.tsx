@@ -78,16 +78,27 @@ function ActionButtons({
 }) {
   const phone = findPhoneForReminder(reminder, people)
 
+  // Link to the day view in Google Calendar rather than the specific event URL.
+  // The event htmlLink (https://www.google.com/calendar/event?eid=...) fails on iOS
+  // when the Google Calendar app can't resolve it cross-account. The day view URL
+  // always works as long as the user is signed into Google in Safari.
+  const calendarDayUrl = (reminder.calendarHtmlLink || reminder.calendarEventId)
+    ? (() => {
+        const d = reminder.date instanceof Date ? reminder.date : new Date(reminder.date)
+        return `https://calendar.google.com/calendar/r/day/${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+      })()
+    : null
+
   return (
     <div className="flex items-center gap-0.5 flex-shrink-0">
-      {reminder.calendarHtmlLink && (
+      {calendarDayUrl && (
         <a
-          href={reminder.calendarHtmlLink}
+          href={calendarDayUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="p-1.5 text-terra/40 hover:text-terra rounded-xl
                      hover:bg-blush-pale transition-all duration-150"
-          title="Open in Google Calendar"
+          title="View in Google Calendar"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

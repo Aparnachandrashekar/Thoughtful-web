@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { getDateBounds } from '@/lib/dateFormat'
 
 interface DatePickerModalProps {
@@ -16,18 +17,27 @@ function toLocalDatetimeString(d: Date): string {
 }
 
 export default function DatePickerModal({ text, onConfirm, onCancel }: DatePickerModalProps) {
+  const [mounted, setMounted] = useState(false)
   const tenMinsFromNow = new Date(Date.now() + 10 * 60 * 1000)
   const { min: minDate, max: maxDate } = getDateBounds()
 
   const [datetime, setDatetime] = useState(toLocalDatetimeString(tenMinsFromNow))
   const previewText = text.length > 40 ? text.slice(0, 40) + '…' : text
 
+  useEffect(() => {
+    setMounted(true)
+    return () => setMounted(false)
+  }, [])
+
   const handleConfirm = () => {
-    // datetime-local value is local time — new Date() treats no-timezone strings as local
     onConfirm(new Date(datetime))
   }
 
-  return (
+  if (!mounted) return null
+
+  // Rendered via portal so fixed positioning is always relative to the viewport,
+  // never trapped by a parent element's CSS transform or stacking context.
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -35,10 +45,9 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
         onClick={onCancel}
       />
 
-      {/* Bottom sheet — max-h prevents overflow when native picker expands */}
+      {/* Bottom sheet */}
       <div
-        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl
-                   max-h-[85vh] overflow-y-auto animate-slide-up"
+        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl animate-slide-up"
         style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -55,7 +64,6 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
             &ldquo;{previewText}&rdquo;
           </p>
 
-          {/* Single datetime-local input — avoids two-input overflow on mobile */}
           <label className="block text-xs font-semibold text-terra/50 uppercase tracking-widest mb-2">
             Date &amp; Time
           </label>
@@ -88,6 +96,7 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

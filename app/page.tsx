@@ -207,18 +207,25 @@ export default function Home() {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
 
-  // Pull new data from Firestore into localStorage + reload UI.
-  // Throttled to once per 60 s so foreground events don't hammer the DB.
-  const syncFromFirestore = useCallback(async () => {
+  // Bidirectional Firestore sync: pull data from Firestore, then push any local-only data.
+  // Called on mount (via the Firestore effect), on app foreground, and on pull-to-refresh.
+  // Throttled to once per 10 s to avoid hammering Firestore on rapid tab switches.
+  const syncFromFirestore = useCallback(async (force = false) => {
     if (!userEmail || !firebaseReady) return
     const now = Date.now()
-    if (now - lastFirestorePull.current < 60_000) return
+    if (!force && now - lastFirestorePull.current < 10_000) return
     lastFirestorePull.current = now
+
+    // Pull: get Firestore data not yet in localStorage
     const { reminders: r, people: p } = await pullFromFirestore(userEmail).catch(() => ({ reminders: 0, people: 0 }))
     if (r > 0 || p > 0) {
       loadReminders()
       setPeople(loadPeople(userEmail))
     }
+    // Push: send any localStorage data not yet in Firestore
+    // This is essential on first run after Firestore rules are deployed,
+    // since all previous pushes failed silently with permission-denied.
+    await fullSyncToFirestore(userEmail).catch(() => {})
   }, [userEmail, firebaseReady, loadReminders])
 
   // Check Google Calendar for changes to synced reminders (called on tab becoming visible)
@@ -347,8 +354,8 @@ export default function Home() {
           })
         }
         checkForCalendarChanges()
-        // Re-pull from Firestore so data created on another device/browser shows up
-        syncFromFirestore()
+        // Bidirectional sync so data created on another device/browser shows up
+        syncFromFirestore(false)
       }
     }
     window.addEventListener('focus', checkForCalendarChanges)
@@ -393,24 +400,12 @@ export default function Home() {
     }
   }, [reminders, mounted, saveReminders])
 
-  // Sync with Firestore: pull first (for new devices), then push, then reload UI.
-  // Gated on firebaseReady so anonymous auth is established before any Firestore call.
+  // Sync with Firestore on mount (and whenever userEmail/firebaseReady changes).
+  // Uses syncFromFirestore (force=true) so throttle is bypassed on first load.
   const engineStarted = useRef(false)
   useEffect(() => {
     if (userEmail && firebaseReady) {
-      // Pull from Firestore first (restores data on this device if localStorage was cleared),
-      // then push any local-only data, then reload UI state
-      pullFromFirestore(userEmail)
-        .then(({ reminders, people }) => {
-          if (reminders > 0 || people > 0) {
-            // Reload UI from localStorage which now has Firestore data
-            loadReminders()
-            setPeople(loadPeople(userEmail || undefined))
-          }
-          // Then push any local-only items to Firestore
-          return fullSyncToFirestore(userEmail)
-        })
-        .catch(() => {})
+      syncFromFirestore(true)
 
       if (!engineStarted.current) {
         engineStarted.current = true
@@ -421,7 +416,7 @@ export default function Home() {
       stopReminderEngine()
       engineStarted.current = false
     }
-  }, [userEmail, firebaseReady, loadReminders])
+  }, [userEmail, firebaseReady, syncFromFirestore])
 
   const handleGoogleSignIn = () => {
     setSigningIn(true)
@@ -854,9 +849,8 @@ export default function Home() {
     if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
       setIsRefreshing(true)
       setPullDistance(0)
-      // Force a Firestore pull on manual refresh (bypass throttle)
-      lastFirestorePull.current = 0
-      await Promise.all([syncFromFirestore(), checkForCalendarChanges()])
+      // Force bidirectional Firestore sync on manual refresh (bypass throttle)
+      await Promise.all([syncFromFirestore(true), checkForCalendarChanges()])
       loadReminders()
       setIsRefreshing(false)
     } else {

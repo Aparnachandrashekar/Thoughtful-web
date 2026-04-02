@@ -116,6 +116,9 @@ export default function Home() {
   // Track whether reminders have been loaded (prevents saving [] on mount)
   const remindersLoaded = useRef(false)
 
+  // Rate-limit Firestore pull: at most once per 60 seconds
+  const lastFirestorePull = useRef(0)
+
   // Rate-limit GCal change polling: at most once every 30 seconds (reset on tab hide)
   const lastGcalCheck = useRef<number>(0)
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
@@ -203,6 +206,20 @@ export default function Home() {
   const refreshPeople = useCallback(() => {
     setPeople(loadPeople(userEmail || undefined))
   }, [userEmail])
+
+  // Pull new data from Firestore into localStorage + reload UI.
+  // Throttled to once per 60 s so foreground events don't hammer the DB.
+  const syncFromFirestore = useCallback(async () => {
+    if (!userEmail || !firebaseReady) return
+    const now = Date.now()
+    if (now - lastFirestorePull.current < 60_000) return
+    lastFirestorePull.current = now
+    const { reminders: r, people: p } = await pullFromFirestore(userEmail).catch(() => ({ reminders: 0, people: 0 }))
+    if (r > 0 || p > 0) {
+      loadReminders()
+      setPeople(loadPeople(userEmail))
+    }
+  }, [userEmail, firebaseReady, loadReminders])
 
   // Check Google Calendar for changes to synced reminders (called on tab becoming visible)
   const checkForCalendarChanges = useCallback(async () => {
@@ -330,6 +347,8 @@ export default function Home() {
           })
         }
         checkForCalendarChanges()
+        // Re-pull from Firestore so data created on another device/browser shows up
+        syncFromFirestore()
       }
     }
     window.addEventListener('focus', checkForCalendarChanges)
@@ -338,7 +357,7 @@ export default function Home() {
       window.removeEventListener('focus', checkForCalendarChanges)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [checkForCalendarChanges])
+  }, [checkForCalendarChanges, syncFromFirestore])
 
   // Handle person confirmation - create profile with default 'close_friend' type
   // User can edit relationship type later from profile page
@@ -835,8 +854,10 @@ export default function Home() {
     if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
       setIsRefreshing(true)
       setPullDistance(0)
+      // Force a Firestore pull on manual refresh (bypass throttle)
+      lastFirestorePull.current = 0
+      await Promise.all([syncFromFirestore(), checkForCalendarChanges()])
       loadReminders()
-      await checkForCalendarChanges()
       setIsRefreshing(false)
     } else {
       setPullDistance(0)

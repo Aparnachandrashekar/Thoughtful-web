@@ -47,10 +47,10 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
 
       {/* Centered dialog */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+        className="fixed inset-0 z-50 flex items-center justify-center px-5 pointer-events-none"
       >
         <div
-          className="w-[min(360px,90vw)] bg-white rounded-3xl shadow-2xl pointer-events-auto"
+          className="w-full max-w-sm bg-white rounded-3xl shadow-2xl pointer-events-auto"
           onClick={(e) => e.stopPropagation()}
         >
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { CareTemplate } from '@/lib/types'
 import { getRecurrenceLabel, calculateNextReminderDate, getRecurrenceInterval } from '@/lib/templates'
 
@@ -41,6 +42,8 @@ export default function TemplateConfirmationModal({
   const [isLoading, setIsLoading] = useState(false)
 
   const recurrenceInfo = getRecurrenceInterval(template.recurrence)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true); return () => setMounted(false) }, [])
 
   const handleConfirm = () => {
     setIsLoading(true)
@@ -68,14 +71,17 @@ export default function TemplateConfirmationModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-xl p-6 max-w-md w-full mx-4 animate-scale-in
-                      max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-3xl shadow-xl p-6 max-w-sm w-full animate-scale-in
+                      max-h-[88vh] overflow-y-auto"
+           style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
         <div className="space-y-5">
 
           {/* Header */}
@@ -216,6 +222,7 @@ export default function TemplateConfirmationModal({
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -534,23 +534,20 @@ export default function PersonProfilePage() {
 
                 {/* Phone */}
                 {showEditPhone ? (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-blush-pale rounded-pill">
-                      <input
-                        type="tel"
-                        value={editingPhone}
-                        onChange={(e) => setEditingPhone(e.target.value)}
-                        placeholder="e.g. 14155551234"
-                        className="text-xs bg-transparent text-terra-deep placeholder:text-terra/40
-                                   focus:outline-none w-36"
-                        autoFocus
-                      />
-                      <button onClick={handleSavePhone}
-                        className="text-xs font-medium text-terra hover:text-terra-deep transition-colors">Save</button>
-                      <button onClick={() => { setShowEditPhone(false); setEditingPhone(person.phone || '') }}
-                        className="text-xs text-terra/40 hover:text-terra/60 transition-colors">✕</button>
-                    </div>
-                    <p className="text-[10px] text-terra/40 pl-1">No spaces or +</p>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blush-pale rounded-pill">
+                    <input
+                      type="tel"
+                      value={editingPhone}
+                      onChange={(e) => setEditingPhone(e.target.value)}
+                      placeholder="digits, no + or spaces"
+                      className="text-xs bg-transparent text-terra-deep placeholder:text-terra/40
+                                 focus:outline-none w-36"
+                      autoFocus
+                    />
+                    <button onClick={handleSavePhone}
+                      className="text-xs font-medium text-terra hover:text-terra-deep transition-colors">Save</button>
+                    <button onClick={() => { setShowEditPhone(false); setEditingPhone(person.phone || '') }}
+                      className="text-xs text-terra/40 hover:text-terra/60 transition-colors">✕</button>
                   </div>
                 ) : (
                   <button onClick={() => setShowEditPhone(true)}

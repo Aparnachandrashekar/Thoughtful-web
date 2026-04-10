@@ -204,87 +204,82 @@ export async function pullFromFirestore(email: string): Promise<{ reminders: num
   let reminderCount = 0
   let peopleCount = 0
 
-  try {
-    // Pull reminders
-    const remindersKey = `thoughtful-reminders-${email}`
-    const localReminders = localStorage.getItem(remindersKey)
-    const localReminderList: any[] = localReminders ? JSON.parse(localReminders) : []
-    const localReminderIds = new Set(localReminderList.map((r: any) => r.id))
+  // Pull reminders — let errors throw so callers can surface them
+  const remindersKey = `thoughtful-reminders-${email}`
+  const localReminders = localStorage.getItem(remindersKey)
+  const localReminderList: any[] = localReminders ? JSON.parse(localReminders) : []
+  const localReminderIds = new Set(localReminderList.map((r: any) => r.id))
 
-    const reminderSnap = await getDocs(query(remindersCol(email)))
-    const newReminders: any[] = []
+  const reminderSnap = await getDocs(query(remindersCol(email)))
+  const newReminders: any[] = []
 
-    reminderSnap.docs.forEach(d => {
-      if (!localReminderIds.has(d.id)) {
-        const data = d.data()
-        newReminders.push({
-          id: d.id,
-          text: data.text || '',
-          date: data.date || '',
-          isCompleted: data.isCompleted === true,
-          calendarEventId: data.calendarEventId || undefined,
-          calendarHtmlLink: data.calendarHtmlLink || undefined,
-          lastSyncedAt: data.lastSyncedAt || undefined,
-          originalStartTime: data.originalStartTime || undefined,
-          isRecurring: data.isRecurring === true,
-          isBirthday: data.isBirthday === true,
-          isAnniversary: data.isAnniversary === true,
-          message: data.message || undefined,
-          personName: data.personName || undefined,
-          phoneNumber: data.phoneNumber || undefined,
-          whatsappLink: data.whatsappLink || undefined,
-          triggerAt: data.triggerAt || undefined,
-          createdAt: data.createdAt || undefined,
-          triggered: data.triggered === true,
-        })
-      }
-    })
-
-    if (newReminders.length > 0) {
-      const merged = [...newReminders, ...localReminderList]
-      localStorage.setItem(remindersKey, JSON.stringify(merged))
-      reminderCount = newReminders.length
-      console.log(`Firestore: pulled ${reminderCount} reminders`)
+  reminderSnap.docs.forEach(d => {
+    if (!localReminderIds.has(d.id)) {
+      const data = d.data()
+      newReminders.push({
+        id: d.id,
+        text: data.text || '',
+        date: data.date || '',
+        isCompleted: data.isCompleted === true,
+        calendarEventId: data.calendarEventId || undefined,
+        calendarHtmlLink: data.calendarHtmlLink || undefined,
+        lastSyncedAt: data.lastSyncedAt || undefined,
+        originalStartTime: data.originalStartTime || undefined,
+        isRecurring: data.isRecurring === true,
+        isBirthday: data.isBirthday === true,
+        isAnniversary: data.isAnniversary === true,
+        message: data.message || undefined,
+        personName: data.personName || undefined,
+        phoneNumber: data.phoneNumber || undefined,
+        whatsappLink: data.whatsappLink || undefined,
+        triggerAt: data.triggerAt || undefined,
+        createdAt: data.createdAt || undefined,
+        triggered: data.triggered === true,
+      })
     }
+  })
 
-    // Pull people
-    const peopleKey = `thoughtful-people-${email}`
-    const localPeople = localStorage.getItem(peopleKey)
-    const localPeopleList: any[] = localPeople ? JSON.parse(localPeople) : []
-    const localPeopleIds = new Set(localPeopleList.map((p: any) => p.id))
-
-    const peopleSnap = await getDocs(query(peopleCol(email)))
-    const newPeople: any[] = []
-
-    peopleSnap.docs.forEach(d => {
-      if (!localPeopleIds.has(d.id)) {
-        const data = d.data()
-        newPeople.push({
-          id: d.id,
-          name: data.name || '',
-          linkedReminderIds: Array.isArray(data.linkedReminderIds) ? data.linkedReminderIds : [],
-          createdAt: data.createdAt || new Date().toISOString(),
-          avatarColor: data.avatarColor || 'lavender',
-          relationshipType: data.relationshipType || 'close_friend',
-          birthday: data.birthday || undefined,
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-        })
-      }
-    })
-
-    if (newPeople.length > 0) {
-      const merged = [...newPeople, ...localPeopleList]
-      localStorage.setItem(peopleKey, JSON.stringify(merged))
-      peopleCount = newPeople.length
-      console.log(`Firestore: pulled ${peopleCount} people`)
-    }
-
-    console.log('Firestore: pull complete -', reminderCount, 'reminders,', peopleCount, 'people')
-  } catch (e) {
-    console.error('Firestore: pull failed:', e)
+  if (newReminders.length > 0) {
+    const merged = [...newReminders, ...localReminderList]
+    localStorage.setItem(remindersKey, JSON.stringify(merged))
+    reminderCount = newReminders.length
+    console.log(`Firestore: pulled ${reminderCount} reminders`)
   }
 
+  // Pull people
+  const peopleKey = `thoughtful-people-${email}`
+  const localPeople = localStorage.getItem(peopleKey)
+  const localPeopleList: any[] = localPeople ? JSON.parse(localPeople) : []
+  const localPeopleIds = new Set(localPeopleList.map((p: any) => p.id))
+
+  const peopleSnap = await getDocs(query(peopleCol(email)))
+  const newPeople: any[] = []
+
+  peopleSnap.docs.forEach(d => {
+    if (!localPeopleIds.has(d.id)) {
+      const data = d.data()
+      newPeople.push({
+        id: d.id,
+        name: data.name || '',
+        linkedReminderIds: Array.isArray(data.linkedReminderIds) ? data.linkedReminderIds : [],
+        createdAt: data.createdAt || new Date().toISOString(),
+        avatarColor: data.avatarColor || 'lavender',
+        relationshipType: data.relationshipType || 'close_friend',
+        birthday: data.birthday || undefined,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+      })
+    }
+  })
+
+  if (newPeople.length > 0) {
+    const merged = [...newPeople, ...localPeopleList]
+    localStorage.setItem(peopleKey, JSON.stringify(merged))
+    peopleCount = newPeople.length
+    console.log(`Firestore: pulled ${peopleCount} people`)
+  }
+
+  console.log('Firestore: pull complete -', reminderCount, 'reminders,', peopleCount, 'people')
   return { reminders: reminderCount, people: peopleCount }
 }
 

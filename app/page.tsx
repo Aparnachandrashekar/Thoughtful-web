@@ -216,15 +216,23 @@ export default function Home() {
     if (!force && now - lastFirestorePull.current < 10_000) return
     lastFirestorePull.current = now
 
-    // Pull: get Firestore data not yet in localStorage
-    const { reminders: r, people: p } = await pullFromFirestore(userEmail).catch(() => ({ reminders: 0, people: 0 }))
-    if (r > 0 || p > 0) {
+    try {
+      // Pull: get Firestore data not yet in localStorage
+      const { reminders: r, people: p } = await pullFromFirestore(userEmail)
+      // Always reload reminders after pull so UI reflects latest localStorage state
       loadReminders()
       setPeople(loadPeople(userEmail))
+      if (r > 0 || p > 0) {
+        console.log(`Sync: pulled ${r} reminders, ${p} people`)
+      }
+    } catch (e: any) {
+      const msg = e?.code || e?.message || String(e)
+      console.error('Firestore pull failed:', msg)
+      setStatus(`Sync error: ${msg}`)
+      setTimeout(() => setStatus(null), 6000)
     }
+
     // Push: send any localStorage data not yet in Firestore
-    // This is essential on first run after Firestore rules are deployed,
-    // since all previous pushes failed silently with permission-denied.
     await fullSyncToFirestore(userEmail).catch(() => {})
   }, [userEmail, firebaseReady, loadReminders])
 

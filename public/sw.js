@@ -1,4 +1,4 @@
-const CACHE_NAME = 'thoughtful-v6'
+const CACHE_NAME = 'thoughtful-v7'
 
 const PRECACHE_URLS = [
   '/',

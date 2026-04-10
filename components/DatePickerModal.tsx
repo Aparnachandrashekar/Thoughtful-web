@@ -45,18 +45,16 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
         onClick={onCancel}
       />
 
-      {/* Bottom sheet */}
+      {/* Centered dialog */}
       <div
-        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl animate-slide-up"
-        style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
       >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-terra/20" />
-        </div>
+        <div
+          className="w-[min(360px,90vw)] bg-white rounded-3xl shadow-2xl pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
 
-        <div className="px-6 pt-4 pb-6">
+        <div className="px-6 pt-6 pb-6">
           <h3 className="text-lg font-semibold text-[#2D1810] mb-1">
             When should we remind you?
           </h3>
@@ -94,6 +92,7 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
               Set Reminder
             </button>
           </div>
+        </div>
         </div>
       </div>
     </>,

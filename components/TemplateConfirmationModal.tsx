@@ -79,10 +79,9 @@ export default function TemplateConfirmationModal({
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-xl p-6 max-w-sm w-full animate-scale-in
-                      max-h-[88vh] overflow-y-auto"
-           style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-        <div className="space-y-5">
+      <div className="relative bg-white rounded-3xl shadow-xl max-w-sm w-full animate-scale-in
+                      max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* Header */}
           <div className="text-center">
@@ -200,26 +199,27 @@ export default function TemplateConfirmationModal({
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="flex-1 py-3 px-4 bg-blush-pale text-terra/70 rounded-pill text-sm font-medium
-                         hover:bg-blush-light transition-all duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={isLoading || !editedText.trim()}
-              className="flex-1 py-3 px-4 bg-terra text-white rounded-pill text-sm font-medium
-                         hover:bg-terra-deep transition-all duration-200 active:scale-95
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Creating…' : 'Create Reminder'}
-            </button>
-          </div>
+        </div>
 
+        {/* Actions — fixed to bottom of modal, never scrolls away */}
+        <div className="flex gap-3 px-5 py-4 border-t border-blush-light/40"
+             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3 px-4 bg-blush-pale text-terra/70 rounded-pill text-sm font-medium
+                       hover:bg-blush-light transition-all duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading || !editedText.trim()}
+            className="flex-1 py-3 px-4 bg-terra text-white rounded-pill text-sm font-medium
+                       hover:bg-terra-deep transition-all duration-200 active:scale-95
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Creating…' : 'Create Reminder'}
+          </button>
         </div>
       </div>
     </div>,

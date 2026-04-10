@@ -34,16 +34,16 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
         onClick={onCancel}
       />
 
-      {/* Dialog — explicit translate centering, reliable on iOS PWA */}
+      {/* Dialog — outer div anchors left/right to avoid 100vw overflow on iOS */}
       <div
-        className="fixed z-50 bg-white rounded-3xl shadow-2xl"
-        style={{
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 'calc(100vw - 40px)',
-          maxWidth: '360px',
-        }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                 padding: '0 20px', zIndex: 50, pointerEvents: 'none' }}
+      >
+      <div
+        style={{ width: '100%', maxWidth: '360px', background: 'white',
+                 borderRadius: '24px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+                 pointerEvents: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 pt-6 pb-6">
@@ -85,6 +85,7 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
             </button>
           </div>
         </div>
+      </div>
       </div>
     </>,
     document.body

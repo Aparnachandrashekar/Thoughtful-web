@@ -78,17 +78,15 @@ export default function TemplateConfirmationModal({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onCancel} />
 
-      {/* Modal — translate centering, reliable on iOS PWA */}
+      {/* Modal — outer div anchors left/right to avoid 100vw overflow on iOS */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 20px', pointerEvents: 'none' }}>
       <div
-        className="absolute bg-white rounded-3xl shadow-xl flex flex-col overflow-hidden"
-        style={{
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 'calc(100vw - 40px)',
-          maxWidth: '400px',
-          maxHeight: '86vh',
-        }}>
+        className="flex flex-col overflow-hidden"
+        style={{ width: '100%', maxWidth: '400px', maxHeight: '86vh',
+                 background: 'white', borderRadius: '24px',
+                 boxShadow: '0 20px 60px rgba(0,0,0,0.2)', pointerEvents: 'auto' }}>
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* Header */}
@@ -229,6 +227,7 @@ export default function TemplateConfirmationModal({
             {isLoading ? 'Creating…' : 'Create Reminder'}
           </button>
         </div>
+      </div>
       </div>
     </div>,
     document.body

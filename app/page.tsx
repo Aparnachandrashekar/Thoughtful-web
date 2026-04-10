@@ -927,7 +927,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 {/* Manual refresh button for PWA — browser refresh unavailable in standalone mode */}
                 <button
-                  onClick={() => { loadReminders(); checkForCalendarChanges() }}
+                  onClick={() => { syncFromFirestore(true); checkForCalendarChanges() }}
                   className="p-2 text-terra/40 hover:text-terra rounded-xl hover:bg-blush-pale
                              transition-all duration-150"
                   title="Refresh"

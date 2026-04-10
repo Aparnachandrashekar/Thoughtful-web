@@ -74,13 +74,21 @@ export default function TemplateConfirmationModal({
   if (!mounted) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+    <div className="fixed inset-0 z-50">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onCancel} />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-xl max-w-sm w-full animate-scale-in
-                      max-h-[88vh] flex flex-col overflow-hidden">
+      {/* Modal — translate centering, reliable on iOS PWA */}
+      <div
+        className="absolute bg-white rounded-3xl shadow-xl flex flex-col overflow-hidden"
+        style={{
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 'calc(100vw - 40px)',
+          maxWidth: '400px',
+          maxHeight: '86vh',
+        }}>
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* Header */}

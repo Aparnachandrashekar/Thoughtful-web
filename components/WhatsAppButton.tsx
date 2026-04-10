@@ -36,34 +36,26 @@ export default function WhatsAppButton({ phone, className = '' }: WhatsAppButton
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 text-center
                           text-xs bg-[#2D1810] text-white px-3 py-2 rounded-xl shadow-lg
                           pointer-events-none z-50 leading-snug">
-            Add a phone number in their profile to enable WhatsApp
+            Save a number in their profile to enable WhatsApp
           </div>
         )}
       </div>
     )
   }
 
-  // Use a hidden iframe to trigger the whatsapp:// deep link.
-  // On iOS PWA (WKWebView), window.location.href = 'whatsapp://' causes the WebView
-  // to attempt navigation and go blank when iOS intercepts it. An iframe src change
-  // triggers the app intent without touching the main page's navigation stack,
-  // so the PWA stays intact when the user returns from WhatsApp.
-  const openWhatsApp = () => {
-    const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent('Hey!')}`
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    iframe.src = url
-    document.body.appendChild(iframe)
-    setTimeout(() => document.body.removeChild(iframe), 2000)
-  }
+  // wa.me is WhatsApp's universal link — iOS intercepts it as a Universal Link
+  // and opens the WhatsApp app directly without navigating the PWA's WKWebView.
+  const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent('Hey!')}`
 
   return (
-    <button
-      onClick={openWhatsApp}
-      className={`${baseClass} text-terra/40 hover:text-green-600 hover:bg-green-50 ${className}`}
+    <a
+      href={waUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${baseClass} inline-flex items-center justify-center text-terra/40 hover:text-green-600 hover:bg-green-50 ${className}`}
       title="Send via WhatsApp"
     >
       <Icon />
-    </button>
+    </a>
   )
 }

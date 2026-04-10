@@ -534,20 +534,23 @@ export default function PersonProfilePage() {
 
                 {/* Phone */}
                 {showEditPhone ? (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-blush-pale rounded-pill">
-                    <input
-                      type="tel"
-                      value={editingPhone}
-                      onChange={(e) => setEditingPhone(e.target.value)}
-                      placeholder="919962593404 (no spaces or + symbol)"
-                      className="text-xs bg-transparent text-terra-deep placeholder:text-terra/40
-                                 focus:outline-none w-48"
-                      autoFocus
-                    />
-                    <button onClick={handleSavePhone}
-                      className="text-xs font-medium text-terra hover:text-terra-deep transition-colors">Save</button>
-                    <button onClick={() => { setShowEditPhone(false); setEditingPhone(person.phone || '') }}
-                      className="text-xs text-terra/40 hover:text-terra/60 transition-colors">✕</button>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blush-pale rounded-pill">
+                      <input
+                        type="tel"
+                        value={editingPhone}
+                        onChange={(e) => setEditingPhone(e.target.value)}
+                        placeholder="e.g. 14155551234"
+                        className="text-xs bg-transparent text-terra-deep placeholder:text-terra/40
+                                   focus:outline-none w-36"
+                        autoFocus
+                      />
+                      <button onClick={handleSavePhone}
+                        className="text-xs font-medium text-terra hover:text-terra-deep transition-colors">Save</button>
+                      <button onClick={() => { setShowEditPhone(false); setEditingPhone(person.phone || '') }}
+                        className="text-xs text-terra/40 hover:text-terra/60 transition-colors">✕</button>
+                    </div>
+                    <p className="text-[10px] text-terra/40 pl-1">No spaces or +</p>
                   </div>
                 ) : (
                   <button onClick={() => setShowEditPhone(true)}

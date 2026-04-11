@@ -12,7 +12,7 @@ interface CareActionsPanelProps {
   onEditRelationship?: () => void
 }
 
-const RELATIONSHIP_ORDER: RelationshipType[] = ['family', 'close_friend', 'friend', 'work', 'other']
+const RELATIONSHIP_ORDER: RelationshipType[] = ['family', 'close_friend', 'friend', 'work', 'spouse', 'other']
 
 export default function CareActionsPanel({
   personName,

@@ -332,9 +332,11 @@ export async function createCalendarEvent(event: {
   }
 
   const calendarId = getThoughtfulCalendarId()
-  const url = event.addMeetLink
-    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1`
-    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+  const params = new URLSearchParams()
+  if (event.addMeetLink) params.set('conferenceDataVersion', '1')
+  if (event.attendeeEmail) params.set('sendUpdates', 'all')
+  const paramStr = params.toString()
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${paramStr ? '?' + paramStr : ''}`
 
   const res = await fetchWithTimeout(url, {
     method: 'POST',

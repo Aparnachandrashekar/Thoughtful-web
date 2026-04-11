@@ -947,13 +947,6 @@ export default function Home() {
                   </svg>
                 </button>
                 {googleReady && !calendarConnected && !refreshingCalendar && (() => {
-                  // Don't show "Reconnect Calendar" within 90 days of last explicit sign-in.
-                  // Silent refresh handles token renewal automatically — only prompt the user
-                  // when the Google session has genuinely expired (i.e. after 3 months).
-                  const lastSignIn = parseInt(localStorage.getItem('thoughtful-last-signin') || '0', 10)
-                  const ninetyDays = 90 * 24 * 60 * 60 * 1000
-                  const recentlySignedIn = lastSignIn > 0 && (Date.now() - lastSignIn) < ninetyDays
-                  if (recentlySignedIn) return null
                   return (
                     <button
                       onClick={handleGoogleSignIn}

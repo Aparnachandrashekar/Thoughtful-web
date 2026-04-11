@@ -637,12 +637,13 @@ export default function Home() {
           setStatus(successMsg)
         }
         setTimeout(() => setStatus(null), 3000)
-      } catch (e) {
+      } catch (e: any) {
         console.error('Calendar sync failed:', e)
         // If token expired, update UI immediately so Reconnect Calendar button appears
         if (!isSignedIn()) setCalendarConnected(false)
-        setStatus('Saved locally (calendar sync failed)')
-        setTimeout(() => setStatus(null), 3000)
+        const errMsg = e?.message || 'unknown error'
+        setStatus(`Saved locally (${errMsg})`)
+        setTimeout(() => setStatus(null), 8000)
       }
     } else {
       setStatus(signedIn ? 'Saved locally (reconnecting calendar…)' : 'Saved locally. Sign in to Google for calendar reminders.')

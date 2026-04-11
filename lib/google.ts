@@ -1,10 +1,10 @@
 // Google Identity Services (GIS) for Calendar OAuth token.
 // Firebase Auth is NOT used here — Firestore uses anonymous auth (see app/page.tsx).
 
-export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
+export const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email'
 
 // Bump this string whenever the auth method or scopes change — forces re-auth for all users
-const SCOPE_VERSION = 'gis-v2'
+const SCOPE_VERSION = 'gis-v3'
 const SCOPE_VERSION_KEY = 'thoughtful-scope-version'
 
 export let accessToken: string | null = null
@@ -267,18 +267,70 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
-// Returns the Thoughtful calendar ID — hardcoded constant, no localStorage, no async.
-// This value is embedded directly in the JS bundle at build time.
+// Returns the cached Thoughtful calendar ID (memory → localStorage → 'primary' fallback).
+// Used by update/delete/get calls where the calendar was already created.
 function getThoughtfulCalendarId(): string {
-  // Use a user-specific stored calendar ID if available, otherwise fall back
-  // to 'primary' which always resolves to the signed-in user's own calendar.
+  if (thoughtfulCalendarId) return thoughtfulCalendarId
   const stored = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
-  return stored || 'primary'
+  if (stored) {
+    thoughtfulCalendarId = stored
+    return stored
+  }
+  return 'primary'
 }
 
-// Kept for backwards compat with page.tsx calls — just runs the sync getter
+// Ensures the user has a "Thoughtful" sub-calendar and returns its ID.
+// On first call after sign-in: checks their calendar list, creates if missing, caches the ID.
+// Subsequent calls return the cached ID immediately.
 export async function getOrCreateThoughtfulCalendar(): Promise<string> {
-  return getThoughtfulCalendarId()
+  // Fast path: already in memory or localStorage
+  if (thoughtfulCalendarId) return thoughtfulCalendarId
+  const stored = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
+  if (stored) {
+    thoughtfulCalendarId = stored
+    return stored
+  }
+
+  if (!accessToken) return 'primary'
+
+  try {
+    // Look for an existing "Thoughtful" calendar in the user's list
+    const listRes = await fetchWithTimeout(
+      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (listRes.ok) {
+      const data = await listRes.json()
+      const existing = (data.items || []).find((c: any) => c.summary === 'Thoughtful')
+      if (existing?.id) {
+        thoughtfulCalendarId = existing.id
+        localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, existing.id)
+        return existing.id
+      }
+    }
+
+    // Not found — create a new "Thoughtful" calendar for this user
+    const createRes = await fetchWithTimeout(
+      'https://www.googleapis.com/calendar/v3/calendars',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: 'Thoughtful' }),
+      }
+    )
+    if (createRes.ok) {
+      const cal = await createRes.json()
+      if (cal.id) {
+        thoughtfulCalendarId = cal.id
+        localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, cal.id)
+        return cal.id
+      }
+    }
+  } catch (e) {
+    console.error('getOrCreateThoughtfulCalendar failed:', e)
+  }
+
+  return 'primary'
 }
 
 // Detect auth/permission errors from Calendar API responses
@@ -331,7 +383,7 @@ export async function createCalendarEvent(event: {
     eventBody.attendees = [{ email: event.attendeeEmail }]
   }
 
-  const calendarId = getThoughtfulCalendarId()
+  const calendarId = await getOrCreateThoughtfulCalendar()
   const params = new URLSearchParams()
   if (event.addMeetLink) params.set('conferenceDataVersion', '1')
   if (event.attendeeEmail) params.set('sendUpdates', 'all')

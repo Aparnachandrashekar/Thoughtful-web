@@ -4,7 +4,7 @@
 export const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
 
 // Bump this string whenever the auth method or scopes change — forces re-auth for all users
-const SCOPE_VERSION = 'gis-v1'
+const SCOPE_VERSION = 'gis-v2'
 const SCOPE_VERSION_KEY = 'thoughtful-scope-version'
 
 export let accessToken: string | null = null

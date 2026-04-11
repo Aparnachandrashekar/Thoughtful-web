@@ -15,8 +15,6 @@ const TOKEN_EXPIRY_KEY = 'thoughtful-google-token-expiry'
 const USER_EMAIL_KEY = 'thoughtful-google-email'
 const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
 
-// Hardcoded Thoughtful sub-calendar ID — avoids needing calendar listing scope
-const THOUGHTFUL_CALENDAR_DEFAULT = '54146e0adb2e6f985cc85de278460209a445449d6888b4e004d1d0e3afef4b97@group.calendar.google.com'
 
 let thoughtfulCalendarId: string | null = null
 let gisClientId: string | null = null
@@ -34,12 +32,6 @@ export function initGoogleAuth(clientId: string) {
     localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
     localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
     // Keep USER_EMAIL_KEY so existing reminders/people still load
-  }
-
-  // Seed the Thoughtful calendar ID from env if not already cached
-  const defaultCalendarId = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID
-  if (defaultCalendarId && !localStorage.getItem(THOUGHTFUL_CALENDAR_KEY)) {
-    localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, defaultCalendarId)
   }
 
   const savedToken = localStorage.getItem(TOKEN_KEY)
@@ -278,9 +270,10 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
 // Returns the Thoughtful calendar ID — hardcoded constant, no localStorage, no async.
 // This value is embedded directly in the JS bundle at build time.
 function getThoughtfulCalendarId(): string {
-  const id = process.env.NEXT_PUBLIC_THOUGHTFUL_CALENDAR_ID || THOUGHTFUL_CALENDAR_DEFAULT
-  console.log('[Thoughtful] Using calendar ID:', id)
-  return id
+  // Use a user-specific stored calendar ID if available, otherwise fall back
+  // to 'primary' which always resolves to the signed-in user's own calendar.
+  const stored = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
+  return stored || 'primary'
 }
 
 // Kept for backwards compat with page.tsx calls — just runs the sync getter

@@ -73,6 +73,8 @@ export default function Home() {
   // True while a silent token refresh is in flight — hides the "Reconnect Calendar" button during the attempt
   const [refreshingCalendar, setRefreshingCalendar] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
+  const [gisLoadError, setGisLoadError] = useState(false)
+  const [signInTimedOut, setSignInTimedOut] = useState(false)
   const [firebaseReady, setFirebaseReady] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -428,11 +430,16 @@ export default function Home() {
 
   const handleGoogleSignIn = () => {
     setSigningIn(true)
-    // Safety: clear loading state after 60s in case the popup is closed without completing
-    const signingInTimeout = setTimeout(() => setSigningIn(false), 60_000)
+    setSignInTimedOut(false)
+    // Reset after 30s — covers closed popups, blocked popups, and failed userinfo calls
+    const signingInTimeout = setTimeout(() => {
+      setSigningIn(false)
+      setSignInTimedOut(true)
+    }, 30_000)
     signIn((email) => {
       clearTimeout(signingInTimeout)
       setSigningIn(false)
+      setSignInTimedOut(false)
       setSignedIn(true)
       setCalendarConnected(true)
       setUserEmail(email)
@@ -895,6 +902,7 @@ export default function Home() {
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
+        onError={() => setGisLoadError(true)}
         onLoad={() => {
           setGoogleReady(true)
           // Proactively refresh if the token expired while the GIS script was loading
@@ -1076,7 +1084,22 @@ export default function Home() {
             </>
           ) : (
             <div className="text-center py-10 animate-fade-up delay-200">
-              {googleReady ? (
+              {gisLoadError ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-sm text-terra/60 font-light">
+                    Google sign-in couldn't load.
+                  </p>
+                  <p className="text-xs text-terra/40 font-light max-w-xs">
+                    This is usually caused by an ad blocker or network restriction. Try disabling it for this page, then refresh.
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-1 text-xs text-terra underline hover:no-underline"
+                  >
+                    Refresh page
+                  </button>
+                </div>
+              ) : googleReady ? (
                 <div className="flex flex-col items-center gap-3">
                   <button
                     onClick={handleGoogleSignIn}
@@ -1098,6 +1121,11 @@ export default function Home() {
                   {signingIn && (
                     <p className="text-xs text-terra/40 font-light">
                       Complete sign-in in the Google window, then return here
+                    </p>
+                  )}
+                  {signInTimedOut && (
+                    <p className="text-xs text-terra/50 font-light max-w-xs">
+                      The sign-in window didn't complete. If it was blocked, allow popups for this site and try again.
                     </p>
                   )}
                 </div>

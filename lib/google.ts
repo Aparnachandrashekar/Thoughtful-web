@@ -92,11 +92,17 @@ export function signIn(callback?: (email: string) => void) {
         if (info.email) {
           userEmail = info.email
           localStorage.setItem(USER_EMAIL_KEY, info.email)
-          console.log('GIS: signed in as', info.email)
           if (callback) callback(info.email)
+          return
         }
-      } catch (e) {
-        console.error('GIS: failed to get user email:', e)
+      } catch {
+        // fall through to stored-email fallback
+      }
+      // userinfo failed or returned no email — still complete sign-in with stored email
+      const storedEmail = localStorage.getItem(USER_EMAIL_KEY)
+      if (storedEmail) {
+        userEmail = storedEmail
+        if (callback) callback(storedEmail)
       }
     },
   })

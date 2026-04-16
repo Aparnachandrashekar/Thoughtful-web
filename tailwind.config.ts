@@ -26,8 +26,8 @@ const config: Config = {
         sand: '#F5F0E8',
       },
       fontFamily: {
-        sans:   ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
-        script: ['var(--font-dancing-script)', 'cursive'],
+        sans:   ['DM Sans', 'system-ui', 'sans-serif'],
+        script: ['Dancing Script', 'cursive'],
       },
       borderRadius: {
         'xl':   '1rem',

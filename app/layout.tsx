@@ -1,23 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, Dancing_Script } from 'next/font/google'
 import './globals.css'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 import { PostHogProvider } from '@/components/PostHogProvider'
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  style: ['normal', 'italic'],
-  variable: '--font-dm-sans',
-  display: 'swap',
-})
-
-const dancingScript = Dancing_Script({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-dancing-script',
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: 'Thoughtful',
@@ -43,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${dancingScript.variable}`}>
+    <html lang="en">
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>

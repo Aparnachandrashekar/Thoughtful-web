@@ -50,11 +50,11 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
           <h3 className="text-lg font-semibold text-[#2D1810] mb-1">
             When should we remind you?
           </h3>
-          <p className="text-sm text-terra/45 font-light mb-5 leading-snug">
+          <p className="text-sm text-terra/65 font-light mb-5 leading-snug">
             &ldquo;{previewText}&rdquo;
           </p>
 
-          <label className="block text-xs font-semibold text-terra/50 uppercase tracking-widest mb-2">
+          <label className="block text-xs font-semibold text-terra/70 uppercase tracking-widest mb-2">
             Date &amp; Time
           </label>
           <input

@@ -43,7 +43,7 @@ export default function RelationshipTypeModal({
             <h3 className="text-lg font-semibold text-[#2D1810]">
               How do you know {personName}?
             </h3>
-            <p className="text-sm text-terra/50 mt-1 font-light">
+            <p className="text-sm text-terra/70 mt-1 font-light">
               This helps us suggest relevant reminders
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function RelationshipTypeModal({
                     className="w-full px-3 py-2.5 border-2 border-blush-light focus:border-terra/40
                                rounded-xl outline-none text-sm text-terra-deep"
                   />
-                  <p className="text-xs text-terra/40 font-light">We'll remind you before their birthday</p>
+                  <p className="text-xs text-terra/65 font-light">We'll remind you before their birthday</p>
                 </div>
               )}
             </div>

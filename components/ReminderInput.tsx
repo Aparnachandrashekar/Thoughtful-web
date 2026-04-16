@@ -39,7 +39,7 @@ export default function ReminderInput({ onSubmit }: ReminderInputProps) {
           onBlur={() => setFocused(false)}
           placeholder="Type here: Title — Date/Day — Time"
           className="flex-1 min-w-0 bg-transparent text-sm sm:text-base text-terra-deep font-light
-                     placeholder:text-terra/45 focus:ring-0 focus:outline-none"
+                     placeholder:text-terra/60 focus:ring-0 focus:outline-none"
         />
         <button
           type="submit"
@@ -61,7 +61,7 @@ export default function ReminderInput({ onSubmit }: ReminderInputProps) {
         </button>
       </div>
 
-      <p className="mt-3 text-xs sm:text-sm text-terra/40 text-center font-light tracking-widest uppercase">
+      <p className="mt-3 text-xs sm:text-sm text-terra/65 text-center font-light tracking-widest uppercase">
         Title &nbsp;·&nbsp; Day / Date &nbsp;·&nbsp; Time
       </p>
     </form>

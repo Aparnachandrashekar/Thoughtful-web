@@ -30,11 +30,11 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
       <div className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-sm mx-4 animate-scale-in">
 
         <h3 className="text-lg font-semibold text-[#2D1810] mb-1">Edit reminder</h3>
-        <p className="text-xs text-terra/45 font-light mb-5">Update the title, date, or time.</p>
+        <p className="text-xs text-terra/65 font-light mb-5">Update the title, date, or time.</p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-terra/45 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
               Title
             </label>
             <input
@@ -47,7 +47,7 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-terra/45 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
               Date
             </label>
             <input
@@ -61,7 +61,7 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-terra/45 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
               Time
             </label>
             <input

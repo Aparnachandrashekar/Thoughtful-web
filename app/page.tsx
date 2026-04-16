@@ -230,8 +230,7 @@ export default function Home() {
     } catch (e: any) {
       const msg = e?.code || e?.message || String(e)
       console.error('Firestore pull failed:', msg)
-      setStatus(`Sync error: ${msg}`)
-      setTimeout(() => setStatus(null), 6000)
+      // Don't surface raw Firestore errors to users — data is safe in localStorage
     }
 
     // Push: send any localStorage data not yet in Firestore
@@ -646,14 +645,22 @@ export default function Home() {
         setTimeout(() => setStatus(null), 3000)
       } catch (e: any) {
         console.error('Calendar sync failed:', e)
-        // If token expired, update UI immediately so Reconnect Calendar button appears
-        if (!isSignedIn()) setCalendarConnected(false)
-        const errMsg = e?.message || 'unknown error'
-        setStatus(`Saved locally (${errMsg})`)
-        setTimeout(() => setStatus(null), 8000)
+        const msg = (e?.message || '').toLowerCase()
+        const isAuth = !isSignedIn() || msg.includes('401') || msg.includes('403') ||
+          msg.includes('unauthorized') || msg.includes('forbidden') || msg.includes('insufficient')
+        if (isAuth) {
+          // Token expired or revoked — show reconnect prompt
+          setCalendarConnected(false)
+          setStatus('Reminder saved. Tap "Reconnect Calendar" to sync.')
+          setTimeout(() => setStatus(null), 6000)
+        } else {
+          // Network/timeout/other — reminder is safely stored locally + Firestore
+          setStatus('Reminder saved')
+          setTimeout(() => setStatus(null), 2000)
+        }
       }
     } else {
-      setStatus(signedIn ? 'Saved locally (reconnecting calendar…)' : 'Saved locally. Sign in to Google for calendar reminders.')
+      setStatus(signedIn ? 'Reminder saved (calendar reconnection needed)' : 'Reminder saved. Sign in with Google for calendar sync.')
       setTimeout(() => setStatus(null), 3000)
     }
   }, [userEmail, refreshPeople, signedIn])
@@ -980,7 +987,7 @@ export default function Home() {
             <h1 className="font-script text-6xl sm:text-7xl md:text-8xl text-terra leading-none select-none">
               Thoughtful
             </h1>
-            <p className="mt-8 sm:mt-10 text-terra/55 text-sm sm:text-base font-light tracking-wide">
+            <p className="mt-8 sm:mt-10 text-terra/75 text-sm sm:text-base font-light tracking-wide">
               An easy way to remember things that matter
             </p>
           </div>
@@ -1036,7 +1043,7 @@ export default function Home() {
 
               {/* Help text */}
               <div className="text-center mb-8 animate-fade-up delay-300">
-                <p className="text-xs text-terra/35 font-light leading-relaxed">
+                <p className="text-xs text-terra/60 font-light leading-relaxed">
                   To edit, type <span className="italic">&quot;update [event name] to&hellip;&quot;</span>
                   &nbsp;·&nbsp; Recurring: &quot;every Friday&quot;, &quot;last Saturday of the month&quot;
                 </p>
@@ -1086,10 +1093,10 @@ export default function Home() {
             <div className="text-center py-10 animate-fade-up delay-200">
               {gisLoadError ? (
                 <div className="flex flex-col items-center gap-3">
-                  <p className="text-sm text-terra/60 font-light">
+                  <p className="text-sm text-terra/75 font-light">
                     Google sign-in couldn't load.
                   </p>
-                  <p className="text-xs text-terra/40 font-light max-w-xs">
+                  <p className="text-xs text-terra/65 font-light max-w-xs">
                     This is usually caused by an ad blocker or network restriction. Try disabling it for this page, then refresh.
                   </p>
                   <button
@@ -1119,18 +1126,18 @@ export default function Home() {
                     {signingIn ? 'Opening Google…' : 'Sign in with Google'}
                   </button>
                   {signingIn && (
-                    <p className="text-xs text-terra/40 font-light">
+                    <p className="text-xs text-terra/65 font-light">
                       Complete sign-in in the Google window, then return here
                     </p>
                   )}
                   {signInTimedOut && (
-                    <p className="text-xs text-terra/50 font-light max-w-xs">
+                    <p className="text-xs text-terra/70 font-light max-w-xs">
                       The sign-in window didn't complete. If it was blocked, allow popups for this site and try again.
                     </p>
                   )}
                 </div>
               ) : (
-                <p className="text-terra/40 text-sm font-light">Loading…</p>
+                <p className="text-terra/65 text-sm font-light">Loading…</p>
               )}
             </div>
           )}
@@ -1182,7 +1189,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="text-center py-8 px-5">
-        <div className="flex items-center justify-center gap-4 text-xs text-terra/35 font-light">
+        <div className="flex items-center justify-center gap-4 text-xs text-terra/60 font-light">
           <a href="/privacy" className="hover:text-terra transition-colors">Privacy</a>
           <span>·</span>
           <a href="/terms" className="hover:text-terra transition-colors">Terms</a>

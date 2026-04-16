@@ -95,7 +95,7 @@ export default function TemplateConfirmationModal({
               <span className="text-2xl">{template.emoji}</span>
             </div>
             <h3 className="text-lg font-semibold text-[#2D1810]">Create Reminder</h3>
-            <p className="text-sm text-terra/50 mt-1 font-light">
+            <p className="text-sm text-terra/70 mt-1 font-light">
               {template.label} for {personName}
             </p>
           </div>
@@ -103,7 +103,7 @@ export default function TemplateConfirmationModal({
           {/* Fields */}
           <div className="bg-blush-pale/40 rounded-2xl p-4 space-y-3">
             <div>
-              <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">
+              <label className="text-xs font-medium text-terra/65 uppercase tracking-[0.12em]">
                 Reminder
               </label>
               <input
@@ -117,7 +117,7 @@ export default function TemplateConfirmationModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">Date</label>
+                <label className="text-xs font-medium text-terra/65 uppercase tracking-[0.12em]">Date</label>
                 <input
                   type="date"
                   value={date}
@@ -127,7 +127,7 @@ export default function TemplateConfirmationModal({
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-terra/40 uppercase tracking-[0.12em]">Time</label>
+                <label className="text-xs font-medium text-terra/65 uppercase tracking-[0.12em]">Time</label>
                 <input
                   type="time"
                   value={time}
@@ -138,7 +138,7 @@ export default function TemplateConfirmationModal({
               </div>
             </div>
 
-            <p className="text-xs text-terra/40 font-light">{formatDatePreview(date)}</p>
+            <p className="text-xs text-terra/65 font-light">{formatDatePreview(date)}</p>
           </div>
 
           {/* Recurrence */}
@@ -159,7 +159,7 @@ export default function TemplateConfirmationModal({
                   </label>
                 </div>
                 {isRecurring && (
-                  <p className="text-xs text-terra/45 mt-1 ml-6 font-light">
+                  <p className="text-xs text-terra/65 mt-1 ml-6 font-light">
                     This reminder will automatically recur
                   </p>
                 )}
@@ -184,7 +184,7 @@ export default function TemplateConfirmationModal({
                 </label>
               </div>
               {addMeetLink && (
-                <p className="text-xs text-terra/45 mt-1 ml-6 font-light">
+                <p className="text-xs text-terra/65 mt-1 ml-6 font-light">
                   {personEmail
                     ? `Invite will be sent to ${personEmail}`
                     : `Add ${personName}'s email to send invite`}
@@ -194,7 +194,7 @@ export default function TemplateConfirmationModal({
           </div>
 
           {/* Summary */}
-          <div className="text-center text-xs text-terra/45 font-light py-1 border-t border-blush-light/60">
+          <div className="text-center text-xs text-terra/65 font-light py-1 border-t border-blush-light/60">
             {isRecurring ? (
               <p>
                 First on <span className="font-medium text-terra-deep">{formatDatePreview(date)}</span>,

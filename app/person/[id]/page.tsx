@@ -441,7 +441,7 @@ export default function PersonProfilePage() {
   if (isLoading || !person) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
-        <div className="text-terra/40 text-sm font-light animate-pulse-soft">Loading…</div>
+        <div className="text-terra/65 text-sm font-light animate-pulse-soft">Loading…</div>
       </div>
     )
   }
@@ -500,7 +500,7 @@ export default function PersonProfilePage() {
                     🎂&nbsp;{new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 )}
-                <span className="text-xs text-terra/35 font-light">
+                <span className="text-xs text-terra/60 font-light">
                   {upcomingReminders.length} upcoming · {pastReminders.length} past
                 </span>
               </div>
@@ -678,7 +678,7 @@ export default function PersonProfilePage() {
             {/* Reminder cards */}
             {displayedReminders.length === 0 ? (
               <div className="py-12 text-center animate-fade-in">
-                <p className="text-terra/40 text-sm font-light">
+                <p className="text-terra/65 text-sm font-light">
                   {activeTab === 'upcoming' ? 'No upcoming reminders' : 'No past reminders yet'}
                 </p>
               </div>
@@ -708,7 +708,7 @@ export default function PersonProfilePage() {
                             </span>
                           )}
                         </p>
-                        <p className="text-terra/45 text-xs mt-1 font-light">
+                        <p className="text-terra/70 text-xs mt-1 font-light">
                           {formatDate(reminder.date)}
                         </p>
                       </div>

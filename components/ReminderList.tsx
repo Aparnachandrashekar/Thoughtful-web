@@ -148,8 +148,8 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
   if (reminders.length === 0) {
     return (
       <div className="text-center py-16 animate-fade-in">
-        <p className="text-terra/40 text-base font-light">No reminders yet</p>
-        <p className="text-terra/30 text-sm mt-1 font-light">Add one above to get started</p>
+        <p className="text-terra/65 text-base font-light">No reminders yet</p>
+        <p className="text-terra/55 text-sm mt-1 font-light">Add one above to get started</p>
       </div>
     )
   }
@@ -173,10 +173,10 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
       {upcoming.length > 0 && (
         <div className="animate-fade-up delay-100">
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/50 uppercase tracking-[0.15em]">
+            <span className="text-xs font-semibold text-terra/70 uppercase tracking-[0.15em]">
               Upcoming
             </span>
-            <span className="text-xs text-terra/30 font-light">{upcoming.length}</span>
+            <span className="text-xs text-terra/55 font-light">{upcoming.length}</span>
             <div className="flex-1 h-px bg-terra/10" />
           </div>
 
@@ -207,7 +207,7 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
                     <p className="text-[#2D1810] font-medium text-sm sm:text-base leading-snug">
                       {reminder.text}
                     </p>
-                    <p className="text-terra/50 text-xs sm:text-sm mt-1 font-light">
+                    <p className="text-terra/70 text-xs sm:text-sm mt-1 font-light">
                       {formatDate(reminder.date, now)}
                     </p>
                   </div>
@@ -223,10 +223,10 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
       {recurring.length > 0 && (
         <div className="animate-fade-up delay-150">
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/50 uppercase tracking-[0.15em]">
+            <span className="text-xs font-semibold text-terra/70 uppercase tracking-[0.15em]">
               Recurring
             </span>
-            <span className="text-xs text-terra/30 font-light">{recurring.length}</span>
+            <span className="text-xs text-terra/55 font-light">{recurring.length}</span>
             <div className="flex-1 h-px bg-terra/10" />
             <button
               onClick={() => setShowRecurring(!showRecurring)}
@@ -259,10 +259,10 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
                       <p className="text-[#2D1810] font-medium text-sm sm:text-base leading-snug">
                         {reminder.text}
                       </p>
-                      <p className="text-terra/45 text-xs sm:text-sm mt-1 font-light">
+                      <p className="text-terra/70 text-xs sm:text-sm mt-1 font-light">
                         {formatDate(reminder.date, now)}
-                        <span className="mx-1.5 text-terra/25">·</span>
-                        <span className="text-terra/40">{recurringLabel(reminder)}</span>
+                        <span className="mx-1.5 text-terra/35">·</span>
+                        <span className="text-terra/65">{recurringLabel(reminder)}</span>
                       </p>
                     </div>
                     <ActionButtons reminder={reminder} people={people} onEdit={onEdit} onDelete={onDelete} />
@@ -278,10 +278,10 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
       {completed.length > 0 && (
         <div className="animate-fade-up delay-200">
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/30 uppercase tracking-[0.15em]">
+            <span className="text-xs font-semibold text-terra/50 uppercase tracking-[0.15em]">
               History
             </span>
-            <span className="text-xs text-terra/20 font-light">{completed.length}</span>
+            <span className="text-xs text-terra/40 font-light">{completed.length}</span>
             <div className="flex-1 h-px bg-terra/8" />
             <button
               onClick={() => setShowCompleted(!showCompleted)}

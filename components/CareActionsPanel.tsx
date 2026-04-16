@@ -57,7 +57,7 @@ export default function CareActionsPanel({
           )}
         </div>
         {birthday && (
-          <p className="text-xs text-terra/55 mt-2 flex items-center gap-1.5 font-light">
+          <p className="text-xs text-terra/70 mt-2 flex items-center gap-1.5 font-light">
             <span>🎂</span>
             <span>{new Date(birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
           </p>
@@ -66,7 +66,7 @@ export default function CareActionsPanel({
 
       {/* Templates */}
       <div className="p-4">
-        <h3 className="text-xs font-semibold text-terra/40 uppercase tracking-[0.15em] mb-3">
+        <h3 className="text-xs font-semibold text-terra/65 uppercase tracking-[0.15em] mb-3">
           Suggested
         </h3>
 
@@ -86,12 +86,12 @@ export default function CareActionsPanel({
                     <span className="text-xs font-medium text-[#2D1810]">
                       {template.label}
                     </span>
-                    <span className="text-[10px] text-terra/35 bg-blush-pale px-2 py-0.5 rounded-pill flex-shrink-0">
+                    <span className="text-[10px] text-terra/60 bg-blush-pale px-2 py-0.5 rounded-pill flex-shrink-0">
                       {getRecurrenceLabel(template.recurrence)}
                     </span>
                   </div>
                   {template.description && (
-                    <p className="text-xs text-terra/40 mt-0.5 line-clamp-1 font-light">
+                    <p className="text-xs text-terra/65 mt-0.5 line-clamp-1 font-light">
                       {template.description}
                     </p>
                   )}
@@ -128,7 +128,7 @@ export default function CareActionsPanel({
                     <div key={rt}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm">{RELATIONSHIP_EMOJI[rt]}</span>
-                        <span className="text-xs font-medium text-terra/35 uppercase tracking-[0.1em]">
+                        <span className="text-xs font-medium text-terra/60 uppercase tracking-[0.1em]">
                           {RELATIONSHIP_LABELS[rt]}
                         </span>
                       </div>
@@ -144,7 +144,7 @@ export default function CareActionsPanel({
                             <div className="flex items-center gap-2">
                               <span>{template.emoji}</span>
                               <span className="text-terra-deep/80">{template.label}</span>
-                              <span className="ml-auto text-terra/30 font-light">
+                              <span className="ml-auto text-terra/55 font-light">
                                 {getRecurrenceLabel(template.recurrence)}
                               </span>
                             </div>

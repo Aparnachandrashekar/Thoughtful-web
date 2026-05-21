@@ -593,7 +593,9 @@ export default function PersonProfilePage() {
           {displayedReminders.map((reminder, index) => (
             <div
               key={reminder.id}
-              className={`reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 px-5 py-5 animate-fade-up stagger-${Math.min(index, 10)} ${
+              className={`reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40
+                flex items-start gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 w-full max-w-full min-w-0
+                animate-fade-up stagger-${Math.min(index, 10)} ${
                 activeTab === 'past' ? 'opacity-70' : ''
               }`}
               style={{ animationFillMode: 'both' }}

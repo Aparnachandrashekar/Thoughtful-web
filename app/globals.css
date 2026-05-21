@@ -69,6 +69,13 @@ textarea {
   box-shadow: 0 4px 16px rgba(37, 117, 230, 0.08);
 }
 
+@media (max-width: 639px) {
+  .reminder-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
 /* Stagger delays for list entrance */
 .stagger-0 { animation-delay: 0ms; }
 .stagger-1 { animation-delay: 60ms; }

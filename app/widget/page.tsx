@@ -83,7 +83,7 @@ export default function Widget() {
   return (
     <div className="min-h-screen bg-page p-4 sm:p-5 font-sans w-full max-w-md mx-auto">
       <h1 className="font-sans text-xl font-bold text-ink tracking-tight">{copy.appName}</h1>
-      <p className="font-script text-[16px] italic text-ink-muted mt-1 leading-snug">{copy.tagline}</p>
+      <p className="font-outfit text-[16px] italic text-ink-muted font-light mt-1 leading-snug">{copy.tagline}</p>
 
       <div className="mt-4">
         <ReminderInput compact onSubmit={handleSubmit} />

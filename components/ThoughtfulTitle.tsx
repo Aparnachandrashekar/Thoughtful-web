@@ -8,7 +8,7 @@ interface ThoughtfulTitleProps {
 }
 
 const variantClass = {
-  hero: 'text-[clamp(64px,20vw,168px)] max-lg:text-[clamp(56px,16vw,120px)]',
+  hero: 'text-[clamp(48px,14vw,168px)] max-sm:max-w-[calc(100vw-2rem)]',
   profile: 'text-[clamp(28px,7vw,44px)]',
   section: 'text-[clamp(32px,8vw,52px)]',
 }

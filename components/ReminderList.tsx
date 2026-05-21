@@ -36,14 +36,18 @@ interface ReminderListProps {
   newReminderId?: string | null
 }
 
-const ICON_CLASS = 'w-5 h-5'
-const ACTION_BTN = 'p-2.5 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
+const ICON_CLASS = 'w-4 h-4 sm:w-5 sm:h-5'
+const ACTION_BTN =
+  'p-1.5 sm:p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
-const SECTION_LABEL = 'font-outfit text-[15px] font-semibold text-ink-muted tracking-wide py-3'
-const CARD_TITLE = 'font-sans text-[17px] font-bold text-ink leading-snug tracking-tight'
-const CARD_META = 'font-outfit text-[14px] text-ink-muted mt-1.5 font-normal'
+const SECTION_LABEL =
+  'font-outfit text-sm sm:text-[15px] font-semibold text-ink-muted tracking-wide py-2 sm:py-3'
+const CARD_TITLE =
+  'font-sans text-[15px] sm:text-[17px] font-bold text-ink leading-snug tracking-tight break-words'
+const CARD_META = 'font-outfit text-[13px] sm:text-[14px] text-ink-muted mt-1 font-normal'
 const REMINDER_CARD =
-  'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 flex items-start gap-3 px-5 py-5'
+  'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
+  'flex items-start gap-2.5 sm:gap-3 px-3.5 py-3.5 sm:px-4 sm:py-4 w-full max-w-full min-w-0'
 
 function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
   if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
@@ -90,7 +94,7 @@ function ActionButtons({
     : null
 
   return (
-    <div className="flex items-center gap-0.5 flex-shrink-0">
+    <div className="flex items-center gap-0 flex-shrink-0 self-start mt-0.5">
       {calendarDayUrl && (
         <a
           href={calendarDayUrl}
@@ -178,7 +182,7 @@ function ReminderCard({
 }
 
 function ReminderGroup({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-[3px]">{children}</div>
+  return <div className="flex flex-col gap-[3px] w-full max-w-full min-w-0">{children}</div>
 }
 
 export default function ReminderList({
@@ -240,7 +244,7 @@ export default function ReminderList({
   const completed = nonRecurring.filter(r => r.isCompleted || r.date < now)
 
   return (
-    <div className="w-full">
+    <div className="w-full max-w-full min-w-0">
       {upcoming.length > 0 && (
         <div>
           <hr className={SECTION_RULE} />

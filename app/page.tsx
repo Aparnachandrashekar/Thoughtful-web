@@ -1078,14 +1078,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Shared column width = title width; input & cards match */}
-          <div className="w-fit max-w-[calc(100vw-2.5rem)] mx-auto flex flex-col items-stretch px-4 sm:px-0">
-            {/* Landing viewport — title + input only */}
+          <div className="w-full max-w-full mx-auto flex flex-col items-stretch px-4 sm:px-6">
+            {/* Hero: width follows title; input matches on sm+ */}
             <section className="min-h-screen flex flex-col items-center justify-center w-full">
+              <div className="w-full sm:w-fit max-w-full mx-auto flex flex-col items-stretch">
               <h1 className="leading-none text-center w-full">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
-              <p className="font-script text-[20px] italic text-ink-muted mt-6 text-center leading-snug">
+              <p className="font-outfit text-[18px] sm:text-[20px] italic text-ink-muted font-light mt-5 sm:mt-6 text-center leading-snug px-1">
                 {copy.tagline}
               </p>
               <div className="w-full mt-8">
@@ -1138,10 +1138,11 @@ export default function Home() {
                   )}
                 </div>
               )}
+              </div>
             </section>
 
             {signedIn && (
-              <section className="w-full pb-24 pt-4">
+              <section className="w-full max-w-lg mx-auto pb-24 pt-4">
                 {gcalUpdates.length > 0 && (
                   <div className="mb-6 bg-surface rounded-card overflow-hidden divide-y divide-white">
                     {gcalUpdates.map(update => (

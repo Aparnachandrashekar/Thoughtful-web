@@ -18,7 +18,6 @@ import {
   signOut,
   connectCalendar,
   hasCalendarAccess,
-  hasIdentitySession,
   getUserEmail,
   getRemindersKey,
   createCalendarEvent,
@@ -38,7 +37,6 @@ import { getPrimaryDetectedName } from '@/lib/personDetection'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore, pullFromFirestore } from '@/lib/db'
 import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
 
-/** User-facing message for GIS / OAuth errors (including state validation). */
 function oauthErrorMessage(reason: string): string {
   if (reason.startsWith('state_')) {
     if (reason === 'state_expired') return 'Sign-in timed out. Please try again.'
@@ -157,7 +155,6 @@ export default function Home() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
-  // Debounced silent calendar refresh — avoids auth loops on startup / tab focus / intervals
   const attemptSilentCalendarRefresh = useCallback(() => {
     if (silentRefreshInFlight.current || !getStoredEmail()) return
     silentRefreshInFlight.current = true
@@ -202,7 +199,6 @@ export default function Home() {
     // If GIS script is already loaded (e.g. after back navigation), set googleReady immediately
     if ((window as any).google?.accounts?.oauth2) {
       setGoogleReady(true)
-      // Silent refresh only for users who previously granted calendar — never requests new scopes on startup
       if (!tokenValid && storedEmail) {
         attemptSilentCalendarRefresh()
       }
@@ -352,7 +348,7 @@ export default function Home() {
     }
   }, [userEmail])
 
-  // Periodically check calendar token; silent refresh only if calendar was previously granted
+  // Periodically check token validity; silently refresh before showing Reconnect button
   useEffect(() => {
     if (!signedIn) return
     const interval = setInterval(() => {
@@ -453,6 +449,7 @@ export default function Home() {
   const handleGoogleSignIn = () => {
     setSigningIn(true)
     setSignInTimedOut(false)
+    // Reset after 30s — covers closed popups, blocked popups, and failed userinfo calls
     const signingInTimeout = setTimeout(() => {
       setSigningIn(false)
       setSignInTimedOut(true)
@@ -703,7 +700,7 @@ export default function Home() {
         if (isAuth) {
           // Token expired or revoked — show reconnect prompt
           setCalendarConnected(false)
-          setStatus('Reminder saved. Tap "Connect Google Calendar" to sync.')
+          setStatus('Reminder saved. Tap "Connect Calendar" to sync.')
           setTimeout(() => setStatus(null), 6000)
         } else {
           // Network/timeout/other — reminder is safely stored locally + Firestore
@@ -933,24 +930,9 @@ export default function Home() {
     }
   }
 
-  // Greeting + display name derived from signed-in email
-  const getGreeting = () => {
-    const h = new Date().getHours()
-    if (h >= 5 && h < 12) return 'Good Morning'
-    if (h >= 12 && h < 17) return 'Good Afternoon'
-    if (h >= 17 && h < 21) return 'Good Evening'
-    return 'Good Night'
-  }
-  const displayName = userEmail
-    ? (userEmail.split('@')[0].split(/[^a-zA-Z]+/).filter((p: string) => p.length >= 2)[0] || 'there').toUpperCase()
-    : 'THERE'
-  const upcomingCount = reminders.filter(r =>
-    !r.isCompleted && !r.isRecurring && new Date(r.date) >= new Date()
-  ).length
-
   return (
     <div
-      className="min-h-screen bg-[#F5F5F5]"
+      className="min-h-screen"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -961,29 +943,31 @@ export default function Home() {
           className="fixed top-0 inset-x-0 z-50 flex justify-center transition-transform"
           style={{ transform: `translateY(${isRefreshing ? 16 : pullDistance - 32}px)` }}
         >
-          <div className={`w-9 h-9 bg-[#F4C842] border-[3px] border-black flex items-center justify-center ${isRefreshing ? 'animate-spin' : ''}`}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+          <div className={`w-9 h-9 rounded-full bg-white shadow-lg border border-blush-light
+                           flex items-center justify-center
+                           ${isRefreshing ? 'animate-spin' : ''}`}>
+            <svg className="w-4 h-4 text-terra" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </div>
         </div>
       )}
 
-      {/* GIS script */}
+      {/* GIS script — sets googleReady when loaded */}
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
         onError={() => setGisLoadError(true)}
         onLoad={() => {
           setGoogleReady(true)
+          // Proactively refresh if the token expired while the GIS script was loading
           if (!hasCalendarAccess() && getStoredEmail()) {
             attemptSilentCalendarRefresh()
           }
         }}
       />
-
-      {/* Relationships overlay */}
+      {/* Profiles Sidebar — always overlay, never pushes content */}
       {signedIn && (
         <RelationshipsSidebar
           people={people}
@@ -994,39 +978,29 @@ export default function Home() {
         />
       )}
 
-      {/* ── RED HEADER ── */}
-      <header className="sticky top-0 z-30 bg-[#CC1A1A] border-b-[3px] border-black">
-        <div className="flex items-center justify-between px-5 sm:px-8 h-[58px]">
+      <main className="px-5 sm:px-8 md:px-14 py-8 sm:py-10 md:py-14">
+        <div className="max-w-3xl mx-auto">
 
-          {/* Left: People button (signed in) or empty placeholder */}
-          {signedIn ? (
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-2 text-white hover:opacity-75 transition-opacity"
-              aria-label="Open people"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="hidden sm:block text-[11px] font-bold uppercase tracking-widest">People</span>
-            </button>
-          ) : <div className="w-16" />}
-
-          {/* Center: Brand title */}
-          <h1 className="font-anton text-2xl sm:text-[28px] text-white uppercase tracking-wide select-none">
-            Thoughtful
-          </h1>
-
-          {/* Right: utility actions */}
-          <div className="flex items-center gap-1">
-            {signedIn && (
-              <>
+          {/* Top bar: only shown when signed in */}
+          {signedIn && (
+            <div className="flex items-center justify-between mb-8 sm:mb-10 animate-fade-in">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-terra hover:text-terra-deep transition-colors p-1 -ml-1"
+                aria-label="Open profiles"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div className="flex items-center gap-2">
+                {/* Manual refresh button for PWA — browser refresh unavailable in standalone mode */}
                 <button
                   onClick={() => { syncFromFirestore(true); checkForCalendarChanges() }}
-                  className="p-2 text-white/60 hover:text-white transition-colors"
-                  title="Sync"
-                  aria-label="Sync"
+                  className="p-2 text-terra/40 hover:text-terra rounded-xl hover:bg-blush-pale
+                             transition-all duration-150"
+                  title="Refresh"
+                  aria-label="Refresh"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1037,204 +1011,205 @@ export default function Home() {
                   <button
                     onClick={handleConnectCalendar}
                     disabled={connectingCalendar}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5
-                               bg-white text-[#CC1A1A] text-[10px] font-bold uppercase tracking-wider
-                               border-[2px] border-black hover:bg-[#F4C842] transition-colors
-                               disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium
+                               text-terra border border-terra/30 hover:bg-blush-pale
+                               transition-all duration-200 active:scale-95
+                               disabled:opacity-50 disabled:cursor-not-allowed"
                   >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 000-2H5a1 1 0 000 2zm0 0v.01" />
+                    </svg>
                     {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
                   </button>
                 )}
-                <button
-                  onClick={handleGoogleSignOut}
-                  className="p-2 text-white/60 hover:text-white transition-colors"
-                  title="Sign out"
-                  aria-label="Sign out"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ── YELLOW INPUT ZONE ── */}
-      {signedIn && (
-        <section className="bg-[#F4C842] border-b-[3px] border-black px-5 sm:px-8 py-5 sm:py-6">
-          <ReminderInput onSubmit={handleAddReminder} />
-          <p className="mt-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-black/45">
-            Title &nbsp;·&nbsp; Day or Date &nbsp;·&nbsp; Time
-          </p>
-        </section>
-      )}
-
-      {/* ── STATUS BANNERS ── */}
-      {(status || notificationsBlocked || gcalUpdates.length > 0 ||
-        (signedIn && googleReady && !calendarConnected && !refreshingCalendar)) && (
-        <div className="border-b-[2px] border-black bg-white px-5 sm:px-8 py-3 space-y-2">
-          {status && (
-            <p className="inline-flex items-center gap-2 px-3 py-1.5 bg-black text-white
-                          text-[10px] font-bold uppercase tracking-wider">
-              {status}
-            </p>
+              </div>
+            </div>
           )}
+
+          {/* Hero header */}
+          <div className="text-center mb-10 sm:mb-14 animate-fade-up">
+            <h1 className="font-script text-6xl sm:text-7xl md:text-8xl text-terra leading-none select-none">
+              Thoughtful
+            </h1>
+            <p className="mt-8 sm:mt-10 text-terra/75 text-sm sm:text-base font-light tracking-wide">
+              An easy way to remember things that matter
+            </p>
+          </div>
+
+          {/* Notifications blocked banner */}
           {notificationsBlocked && (
-            <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider text-black">
-              <svg className="w-3.5 h-3.5 flex-shrink-0 text-[#CC1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span>Notifications blocked — enable in browser settings</span>
-              <button onClick={() => setNotificationsBlocked(false)} className="ml-auto text-black/40 hover:text-black">✕</button>
+            <div className="text-center mb-4 animate-scale-in">
+              <span className="inline-flex items-center gap-2 text-xs text-amber-700
+                               bg-amber-50 px-4 py-2.5 rounded-pill border border-amber-200">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Notifications are blocked. Enable them in your browser settings.
+                <button
+                  onClick={async () => {
+                    if (typeof Notification !== 'undefined') {
+                      const result = await Notification.requestPermission()
+                      if (result === 'granted') {
+                        setNotificationsBlocked(false)
+                        return
+                      }
+                    }
+                    setNotificationsBlocked(false)
+                  }}
+                  className="underline hover:no-underline font-medium"
+                >
+                  Check again
+                </button>
+                <button onClick={() => setNotificationsBlocked(false)} className="ml-1 opacity-50 hover:opacity-100">✕</button>
+              </span>
             </div>
           )}
-          {signedIn && googleReady && !calendarConnected && !refreshingCalendar && (
-            <button
-              onClick={handleConnectCalendar}
-              disabled={connectingCalendar}
-              className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider
-                         text-[#CC1A1A] hover:underline disabled:opacity-50"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 000-2H5a1 1 0 000 2zm0 0v.01" />
-              </svg>
-              {connectingCalendar ? 'Connecting Google Calendar…' : 'Connect Google Calendar'}
-            </button>
+
+          {/* Status toast */}
+          {status && (
+            <div className="text-center mb-6 animate-scale-in">
+              <span className="inline-block text-xs sm:text-sm text-terra-deep/80 font-light
+                               bg-blush-pale px-5 py-2.5 rounded-pill border border-blush-light">
+                {status}
+              </span>
+            </div>
           )}
-          {gcalUpdates.map(update => (
-            <div key={update.id} className="flex items-start gap-2 text-xs font-medium text-black/70">
-              <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="flex-1">Calendar update: &quot;{update.text}&quot; — {update.change}</span>
-              <button
-                onClick={() => setGcalUpdates(prev => prev.filter(u => u.id !== update.id))}
-                className="text-black/30 hover:text-black flex-shrink-0"
-              >✕</button>
-            </div>
-          ))}
-        </div>
-      )}
 
-      {/* ── MAIN CONTENT ── */}
-      {signedIn ? (
-        <>
-          {/* Greeting strip */}
-          <div className="bg-white border-b-[3px] border-black px-5 sm:px-8 py-5 sm:py-6">
-            <h2 className="font-anton text-3xl sm:text-4xl md:text-5xl uppercase leading-none text-black">
-              {getGreeting()}, {displayName}
-            </h2>
-            <p className="mt-1.5 text-sm text-black/50 font-medium">
-              {upcomingCount > 0
-                ? `${upcomingCount} upcoming reminder${upcomingCount !== 1 ? 's' : ''}`
-                : 'No upcoming reminders yet'}
-            </p>
-            {googleReady && !calendarConnected && !refreshingCalendar && (
-              <button
-                type="button"
-                onClick={handleConnectCalendar}
-                disabled={connectingCalendar}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2
-                           bg-[#CC1A1A] text-white text-[10px] font-bold uppercase tracking-wider
-                           border-[2px] border-black hover:bg-black transition-colors
-                           disabled:opacity-50"
-              >
-                {connectingCalendar ? 'Connecting…' : 'Connect Google Calendar'}
-              </button>
-            )}
-          </div>
+          {/* Signed-in content */}
+          {signedIn ? (
+            <>
+              {/* Calendar connect prompt */}
+              {googleReady && !calendarConnected && !refreshingCalendar && (
+                <div className="text-center mb-6 animate-fade-up">
+                  <button
+                    type="button"
+                    onClick={handleConnectCalendar}
+                    disabled={connectingCalendar}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-pill text-xs font-medium
+                               text-terra border border-terra/30 hover:bg-blush-pale
+                               transition-all duration-200 active:scale-95
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {connectingCalendar ? 'Connecting Google Calendar…' : 'Connect Google Calendar'}
+                  </button>
+                </div>
+              )}
 
-          {/* Reminders */}
-          <div className="px-5 sm:px-8 py-6 sm:py-8">
-            <ReminderList
-              reminders={reminders}
-              people={people}
-              onToggle={handleToggle}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-            <p className="mt-10 text-[10px] text-black/30 font-bold uppercase tracking-widest">
-              Tip: type &ldquo;update [name] to…&rdquo; to edit &nbsp;·&nbsp; &ldquo;every Friday&rdquo; for recurring
-            </p>
-          </div>
-        </>
-      ) : (
-        /* Sign-in hero */
-        <div className="px-5 sm:px-8 py-12 sm:py-20">
-          <div className="max-w-xl">
-            <div className="inline-block bg-[#F4C842] border-[3px] border-black px-4 py-2 mb-6">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-black">
-                Your relationship reminder app
-              </p>
-            </div>
-            <h2 className="font-anton text-5xl sm:text-6xl md:text-7xl uppercase leading-none text-black">
-              Remember<br />what<br />matters.
-            </h2>
-            <p className="mt-4 text-sm sm:text-base text-black/55 font-medium max-w-xs">
-              Stay thoughtfully connected with the people who matter most.
-            </p>
+              {/* Input */}
+              <div className="mb-10">
+                <ReminderInput onSubmit={handleAddReminder} />
+              </div>
 
-            <div className="mt-10 space-y-3">
+
+              {/* Help text */}
+              <div className="text-center mb-8 animate-fade-up delay-300">
+                <p className="text-xs text-terra/60 font-light leading-relaxed">
+                  To edit, type <span className="italic">&quot;update [event name] to&hellip;&quot;</span>
+                  &nbsp;·&nbsp; Recurring: &quot;every Friday&quot;, &quot;last Saturday of the month&quot;
+                </p>
+              </div>
+
+              {/* GCal change notifications */}
+              {gcalUpdates.length > 0 && (
+                <div className="mb-6 space-y-2 animate-fade-up">
+                  {gcalUpdates.map(update => (
+                    <div
+                      key={update.id}
+                      className="flex items-start gap-3 px-4 py-3.5
+                                 bg-blush-pale border border-blush-medium/50 rounded-2xl"
+                    >
+                      <svg className="w-4 h-4 text-terra mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="flex-1 text-sm text-terra-deep/80 font-light">
+                        <span className="font-medium">Calendar update:</span>{' '}
+                        &quot;{update.text}&quot; — {update.change}
+                      </p>
+                      <button
+                        onClick={() => setGcalUpdates(prev => prev.filter(u => u.id !== update.id))}
+                        className="text-terra/30 hover:text-terra/60 flex-shrink-0 transition-colors"
+                        aria-label="Dismiss"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Reminders */}
+              <ReminderList
+                reminders={reminders}
+                people={people}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </>
+          ) : (
+            <div className="text-center py-10 animate-fade-up delay-200">
               {gisLoadError ? (
-                <>
-                  <p className="text-sm font-bold uppercase tracking-wider text-[#CC1A1A]">
-                    Google sign-in couldn&apos;t load.
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-sm text-terra/75 font-light">
+                    Google sign-in couldn't load.
                   </p>
-                  <p className="text-xs text-black/50">
-                    Usually caused by an ad blocker. Disable it for this page, then refresh.
+                  <p className="text-xs text-terra/65 font-light max-w-xs">
+                    This is usually caused by an ad blocker or network restriction. Try disabling it for this page, then refresh.
                   </p>
                   <button
                     onClick={() => window.location.reload()}
-                    className="text-xs font-bold uppercase tracking-wider underline hover:text-[#CC1A1A]"
+                    className="mt-1 text-xs text-terra underline hover:no-underline"
                   >
                     Refresh page
                   </button>
-                </>
+                </div>
               ) : googleReady ? (
-                <>
+                <div className="flex flex-col items-center gap-3">
                   <button
                     onClick={handleGoogleSignIn}
                     disabled={signingIn}
-                    className="inline-flex items-center gap-3 px-8 py-4
-                               bg-[#CC1A1A] text-white font-bold text-xs uppercase tracking-widest
-                               border-[3px] border-black
-                               hover:bg-black transition-colors
+                    className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-white
+                               border border-blush-light rounded-pill text-sm font-medium text-terra-deep
+                               hover:border-terra/30 hover:shadow-[0_4px_20px_rgba(212,117,106,0.18)]
+                               transition-all duration-250 active:scale-95
                                disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
-                      <path fill="#fff" fillOpacity=".9" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-                      <path fill="#fff" fillOpacity=".75" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#fff" fillOpacity=".6" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#fff" fillOpacity=".5" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
                     {signingIn ? 'Opening Google…' : 'Sign in with Google'}
                   </button>
                   {signingIn && (
-                    <p className="text-xs text-black/50 font-medium">
+                    <p className="text-xs text-terra/65 font-light">
                       Complete sign-in in the Google window, then return here
                     </p>
                   )}
                   {signInTimedOut && (
-                    <p className="text-xs text-black/50 font-medium max-w-xs">
-                      Sign-in window didn&apos;t complete. Allow popups for this site and try again.
+                    <p className="text-xs text-terra/70 font-light max-w-xs">
+                      The sign-in window didn't complete. If it was blocked, allow popups for this site and try again.
                     </p>
                   )}
-                </>
+                </div>
               ) : (
-                <p className="text-sm font-bold uppercase tracking-wider text-black/30">Loading…</p>
+                <p className="text-terra/65 text-sm font-light">Loading…</p>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
+      </div>
 
-      {/* Modals */}
+      {/* Date Picker Modal */}
       {pendingText && (
         <DatePickerModal
           text={pendingText}
@@ -1242,6 +1217,8 @@ export default function Home() {
           onCancel={() => setPendingText(null)}
         />
       )}
+
+      {/* Recurrence End Date Modal */}
       {pendingRecurrence && (
         <RecurrenceEndDateModal
           recurrenceType={pendingRecurrence.recurrence.type || 'yearly'}
@@ -1250,6 +1227,9 @@ export default function Home() {
           onCancel={() => setPendingRecurrence(null)}
         />
       )}
+      </main>
+
+      {/* Person Confirmation Modal */}
       {pendingNameConfirmation && (
         <PersonConfirmationModal
           detectedName={pendingNameConfirmation.detectedName}
@@ -1257,6 +1237,8 @@ export default function Home() {
           onDeny={handleDenyPerson}
         />
       )}
+
+      {/* Edit Reminder Modal */}
       {editingReminder && (
         <EditReminderModal
           reminder={editingReminder}
@@ -1270,6 +1252,19 @@ export default function Home() {
           onCancel={() => setEditingReminder(null)}
         />
       )}
+
+      {/* Footer */}
+      <footer className="text-center py-8 px-5">
+        <div className="flex items-center justify-center gap-4 text-xs text-terra/60 font-light">
+          <a href="/privacy" className="hover:text-terra transition-colors">Privacy</a>
+          <span>·</span>
+          <a href="/terms" className="hover:text-terra transition-colors">Terms</a>
+          <span>·</span>
+          <a href="mailto:aparnacs008@gmail.com" className="hover:text-terra transition-colors">Contact</a>
+          <span>·</span>
+          <span>v1.0.0</span>
+        </div>
+      </footer>
     </div>
   )
 }

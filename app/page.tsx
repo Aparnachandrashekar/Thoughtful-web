@@ -1079,7 +1079,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* sm+: one column sized to the title; mobile: hero full width, compact cards below */}
+          {/* sm+: one column sized to the title; mobile: full-width cards below hero */}
           <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6">
             <div className="w-full sm:w-fit max-w-[calc(100vw-2rem)] sm:max-w-none flex flex-col items-stretch">
             <section className="min-h-screen flex flex-col items-center justify-center w-full">
@@ -1102,7 +1102,7 @@ export default function Home() {
                 </p>
               )}
               {signedIn && (
-                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-[17.5rem] sm:max-w-md mx-auto">
+                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
                   {copy.helpText}
                 </p>
               )}
@@ -1141,8 +1141,8 @@ export default function Home() {
 
             {signedIn && (
               <section className="w-full pb-24 pt-4">
-                {/* Mobile: narrower cards; desktop: same width as title column */}
-                <div className="w-full max-w-[17.5rem] mx-auto sm:max-w-none sm:mx-0">
+                {/* Mobile: full column width; desktop: same width as title column */}
+                <div className="w-full sm:max-w-none">
                 {gcalUpdates.length > 0 && (
                   <div className="mb-6 bg-surface rounded-card overflow-hidden divide-y divide-white">
                     {gcalUpdates.map(update => (

@@ -405,7 +405,28 @@ function fixAmbiguousHour(date: Date, hasExplicitMeridiem: boolean): { date: Dat
   // If hour is 1-7 (which chrono defaults to AM), switch to PM
   // because people rarely set reminders for 1am-7am
   if (hour >= 1 && hour <= 7) {
+    const now = new Date()
+
+    // chrono's forwardDate option pushes AM times that are already past to
+    // tomorrow. Check for that: if the date is tomorrow, see whether the PM
+    // equivalent is still valid today and prefer today when it is.
+    const tomorrow = new Date(now)
+    tomorrow.setDate(now.getDate() + 1)
+    const isDateTomorrow =
+      date.getFullYear() === tomorrow.getFullYear() &&
+      date.getMonth() === tomorrow.getMonth() &&
+      date.getDate() === tomorrow.getDate()
+
     date.setHours(hour + 12)
+
+    if (isDateTomorrow) {
+      const todayAtPm = new Date(date)
+      todayAtPm.setFullYear(now.getFullYear(), now.getMonth(), now.getDate())
+      if (todayAtPm > now) {
+        date.setFullYear(now.getFullYear(), now.getMonth(), now.getDate())
+      }
+    }
+
     return { date, needsConfirmation: false }
   }
 

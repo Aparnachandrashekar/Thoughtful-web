@@ -15,6 +15,15 @@ const RELATIONSHIP_TERMS = new Set([
   'fiance', 'fiancee', 'fiancé', 'fiancée'
 ])
 
+// Person-action context words — a proper noun is likely a person name only when
+// one of these appears within 3 words before it
+const PERSON_CONTEXT_WORDS = new Set([
+  'call', 'text', 'message', 'email', 'contact', 'ping', 'reach',
+  'meet', 'see', 'visit', 'invite',
+  'remind', 'tell', 'ask', 'thank', 'congratulate', 'wish', 'greet',
+  'catch', 'check', 'send', 'help', 'with'
+])
+
 // Words to exclude from proper name detection
 const EXCLUSION_LIST = new Set([
   // Days
@@ -70,11 +79,14 @@ export function detectNamesInText(text: string): DetectedName[] {
         /^[A-Z][a-z]+$/.test(cleanWord) &&
         !EXCLUSION_LIST.has(lowerWord)) {
 
-      // Detect any properly-cased word not in the exclusion list.
-      // The exclusion list (days, months, common verbs) is the real guard against
-      // false positives — the old isFirstWord check was blocking names like
-      // "Aparna tomorrow" where the name legitimately starts the phrase.
-      if (!seenNames.has(lowerWord)) {
+      // Only treat as a person name when a person-action verb appears within
+      // 3 words before — prevents "Buy Groceries" or "Book Yoga" from triggering
+      const precedingWords = words
+        .slice(Math.max(0, i - 3), i)
+        .map(w => w.replace(/[^a-zA-Z]/g, '').toLowerCase())
+      const hasPersonContext = precedingWords.some(w => PERSON_CONTEXT_WORDS.has(w))
+
+      if (hasPersonContext && !seenNames.has(lowerWord)) {
         seenNames.add(lowerWord)
         detectedNames.push({
           name: cleanWord,

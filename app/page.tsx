@@ -38,6 +38,20 @@ import { getPrimaryDetectedName } from '@/lib/personDetection'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore, pullFromFirestore } from '@/lib/db'
 import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
 
+/** User-facing message for GIS / OAuth errors (including state validation). */
+function oauthErrorMessage(reason: string): string {
+  if (reason.startsWith('state_')) {
+    if (reason === 'state_expired') return 'Sign-in timed out. Please try again.'
+    if (reason === 'state_mismatch') return 'Security check failed. Please try again.'
+    if (reason === 'state_missing') return 'Sign-in did not complete securely. Please try again.'
+    if (reason === 'state_no_pending') return 'Sign-in session was interrupted. Please try again.'
+    return 'Sign-in could not be verified. Please try again.'
+  }
+  if (reason === 'popup_closed') return 'Sign-in window was closed before completing.'
+  if (reason === 'popup_failed_to_open') return 'Could not open sign-in window. Allow popups and try again.'
+  return 'Something went wrong. Please try again.'
+}
+
 // Helper to generate human-readable pattern description
 function getPatternDescription(recurrence: RecurrenceInfo): string {
   const dayNames: Record<string, string> = {
@@ -443,28 +457,36 @@ export default function Home() {
       setSigningIn(false)
       setSignInTimedOut(true)
     }, 30_000)
-    signIn((email) => {
-      clearTimeout(signingInTimeout)
-      setSigningIn(false)
-      setSignInTimedOut(false)
-      setSignedIn(true)
-      setUserEmail(email)
-      setCalendarConnected(hasCalendarAccess())
-      localStorage.setItem('thoughtful-last-signin', Date.now().toString())
-      setStatus(`Signed in as ${email}`)
-      setTimeout(() => setStatus(null), 2000)
-      if (hasCalendarAccess()) {
-        getOrCreateThoughtfulCalendar().catch((err) => {
-          console.error('Failed to create Thoughtful calendar:', err)
-        })
+    signIn(
+      (email) => {
+        clearTimeout(signingInTimeout)
+        setSigningIn(false)
+        setSignInTimedOut(false)
+        setSignedIn(true)
+        setUserEmail(email)
+        setCalendarConnected(hasCalendarAccess())
+        localStorage.setItem('thoughtful-last-signin', Date.now().toString())
+        setStatus(`Signed in as ${email}`)
+        setTimeout(() => setStatus(null), 2000)
+        if (hasCalendarAccess()) {
+          getOrCreateThoughtfulCalendar().catch((err) => {
+            console.error('Failed to create Thoughtful calendar:', err)
+          })
+        }
+      },
+      (reason) => {
+        clearTimeout(signingInTimeout)
+        setSigningIn(false)
+        setStatus(oauthErrorMessage(reason))
+        setTimeout(() => setStatus(null), 5000)
       }
-    })
+    )
   }
 
   const handleConnectCalendar = () => {
     if (!signedIn) return
     setConnectingCalendar(true)
-    connectCalendar((success) => {
+    connectCalendar((success, reason) => {
       setConnectingCalendar(false)
       if (success) {
         setCalendarConnected(true)
@@ -475,7 +497,9 @@ export default function Home() {
         })
       } else {
         logGoogleAuthEvent('calendar_reconnect_prompt_shown')
-        setStatus('Could not connect calendar. Try again or check popup settings.')
+        setStatus(
+          reason ? oauthErrorMessage(reason) : 'Could not connect calendar. Try again or check popup settings.'
+        )
         setTimeout(() => setStatus(null), 4000)
       }
     })

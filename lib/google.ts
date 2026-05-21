@@ -3,6 +3,15 @@
 // Calendar: https://www.googleapis.com/auth/calendar (explicit user action only).
 
 import { logGoogleAuthEvent } from '@/lib/googleAuthAnalytics'
+import {
+  type OAuthFlowKind,
+  createOAuthState,
+  validateOAuthState,
+  isOAuthStateFailure,
+  clearOAuthState,
+  clearAllOAuthState,
+  pruneExpiredOAuthState,
+} from '@/lib/googleOAuthState'
 
 export const IDENTITY_SCOPES = 'openid email profile'
 export const CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar'
@@ -153,6 +162,7 @@ export function isSignedIn(): boolean {
 export function initGoogleAuth(clientId: string) {
   if (typeof window === 'undefined') return
   gisClientId = clientId
+  pruneExpiredOAuthState()
   migrateAuthStorage()
   restoreTokenFromStorage()
 }
@@ -174,10 +184,20 @@ function responseHasCalendarScope(response: { scope?: string }): boolean {
 }
 
 type TokenRequestOptions = {
+  flow: OAuthFlowKind
   scope: string
   prompt?: string
   onSuccess: (token: string, response: google.accounts.oauth2.TokenResponse) => void
   onError?: (reason: string) => void
+}
+
+function failOAuthState(
+  flow: OAuthFlowKind,
+  result: ReturnType<typeof validateOAuthState>,
+  onError?: (reason: string) => void
+): void {
+  logGoogleAuthEvent('oauth_state_validation_failed', { flow, result })
+  onError?.(`state_${result}`)
 }
 
 function requestOAuthToken(options: TokenRequestOptions): void {
@@ -192,22 +212,37 @@ function requestOAuthToken(options: TokenRequestOptions): void {
     return
   }
 
+  const oauthState = createOAuthState(options.flow)
+
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: gisClientId,
     scope: options.scope,
     include_granted_scopes: true,
+    state: oauthState,
     callback: (response: google.accounts.oauth2.TokenResponse) => {
+      const stateResult = validateOAuthState(options.flow, response.state)
+      if (isOAuthStateFailure(stateResult)) {
+        failOAuthState(options.flow, stateResult, options.onError)
+        return
+      }
       if (response.error) {
+        clearOAuthState(options.flow)
         options.onError?.(response.error)
         return
       }
       if (!response.access_token) {
+        clearOAuthState(options.flow)
         options.onError?.('no_access_token')
         return
       }
       options.onSuccess(response.access_token, response)
     },
     error_callback: (err) => {
+      clearOAuthState(options.flow)
+      logGoogleAuthEvent('oauth_state_cleared', {
+        flow: options.flow,
+        reason: err?.type || 'popup_error',
+      })
       options.onError?.(err?.type || 'popup_error')
     },
   })
@@ -215,6 +250,7 @@ function requestOAuthToken(options: TokenRequestOptions): void {
   tokenClient.requestAccessToken({
     prompt: options.prompt,
     login_hint: getLoginHint(),
+    state: oauthState,
   })
 }
 
@@ -233,9 +269,13 @@ async function fetchIdentityEmail(token: string): Promise<string | null> {
 
 // ─── Sign-in (identity only — never requests Calendar) ───────────────────────
 
-export function signIn(callback?: (email: string) => void) {
+export function signIn(
+  callback?: (email: string) => void,
+  onError?: (reason: string) => void
+) {
   logGoogleAuthEvent('identity_sign_in_started')
   requestOAuthToken({
+    flow: 'identity',
     scope: IDENTITY_SCOPES,
     prompt: '',
     onSuccess: async (token) => {
@@ -246,6 +286,7 @@ export function signIn(callback?: (email: string) => void) {
 
       if (!email) {
         logGoogleAuthEvent('identity_sign_in_failed', { reason: 'no_email' })
+        onError?.('no_email')
         return
       }
 
@@ -256,6 +297,7 @@ export function signIn(callback?: (email: string) => void) {
     },
     onError: (reason) => {
       logGoogleAuthEvent('identity_sign_in_failed', { reason })
+      onError?.(reason)
     },
   })
 }
@@ -263,11 +305,11 @@ export function signIn(callback?: (email: string) => void) {
 // ─── Calendar connect (user-triggered only) ───────────────────────────────────
 
 export function connectCalendar(
-  callback?: (success: boolean) => void
+  callback?: (success: boolean, reason?: string) => void
 ): void {
   if (!hasIdentitySession()) {
     logGoogleAuthEvent('calendar_connect_failed', { reason: 'no_identity_session' })
-    callback?.(false)
+    callback?.(false, 'no_identity_session')
     return
   }
   if (calendarConnectInProgress) return
@@ -280,6 +322,7 @@ export function connectCalendar(
   const tryPrompt = hasCalendarGrant() ? '' : 'consent'
 
   requestOAuthToken({
+    flow: 'calendar',
     scope: CALENDAR_SCOPES,
     prompt: tryPrompt,
     onSuccess: (token, response) => {
@@ -288,7 +331,7 @@ export function connectCalendar(
         logGoogleAuthEvent('calendar_scope_upgrade_failed', {
           granted_scopes: response.scope || '',
         })
-        callback?.(false)
+        callback?.(false, 'calendar_scope_denied')
         return
       }
       const expiryTime = storeAccessToken(token)
@@ -300,7 +343,7 @@ export function connectCalendar(
     onError: (reason) => {
       calendarConnectInProgress = false
       logGoogleAuthEvent('calendar_connect_failed', { reason, prompt: tryPrompt || 'silent' })
-      callback?.(false)
+      callback?.(false, reason)
     },
   })
 }
@@ -358,23 +401,17 @@ export function trySilentCalendarRefresh(): Promise<boolean> {
   silentRefreshInProgress = new Promise<boolean>((resolve) => {
     const timeout = setTimeout(() => {
       lastSilentRefreshFailure = Date.now()
+      clearOAuthState('calendar_silent')
       logGoogleAuthEvent('calendar_silent_refresh_failed', { reason: 'timeout' })
       resolve(false)
     }, 10_000)
 
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: gisClientId!,
+    requestOAuthToken({
+      flow: 'calendar_silent',
       scope: CALENDAR_SCOPES,
-      include_granted_scopes: true,
-      callback: (response: google.accounts.oauth2.TokenResponse) => {
+      prompt: '',
+      onSuccess: (token, response) => {
         clearTimeout(timeout)
-        if (response.error || !response.access_token) {
-          lastSilentRefreshFailure = Date.now()
-          logGoogleAuthEvent('calendar_silent_refresh_failed', {
-            reason: response.error || 'no_token',
-          })
-          return resolve(false)
-        }
         if (!responseHasCalendarScope(response)) {
           lastSilentRefreshFailure = Date.now()
           logGoogleAuthEvent('calendar_scope_upgrade_failed', {
@@ -382,15 +419,20 @@ export function trySilentCalendarRefresh(): Promise<boolean> {
           })
           return resolve(false)
         }
-        const expiryTime = storeAccessToken(response.access_token)
+        const expiryTime = storeAccessToken(token)
         markCalendarGranted()
         scheduleProactiveRefresh(expiryTime)
         lastSilentRefreshFailure = 0
         logGoogleAuthEvent('calendar_silent_refresh_success')
         resolve(true)
       },
+      onError: (reason) => {
+        clearTimeout(timeout)
+        lastSilentRefreshFailure = Date.now()
+        logGoogleAuthEvent('calendar_silent_refresh_failed', { reason })
+        resolve(false)
+      },
     })
-    tokenClient.requestAccessToken({ prompt: '', login_hint: getLoginHint() })
   }).finally(() => {
     silentRefreshInProgress = null
   })
@@ -416,12 +458,14 @@ export function clearCalendarToken() {
 /** App sign-out: clears local session only. Does not revoke Google grants. */
 export function signOut() {
   logGoogleAuthEvent('identity_sign_out')
+  clearAllOAuthState()
   clearCalendarToken()
   userEmail = null
   localStorage.removeItem(USER_EMAIL_KEY)
   localStorage.removeItem(CALENDAR_GRANTED_KEY)
   lastSilentRefreshAttempt = 0
   lastSilentRefreshFailure = 0
+  calendarConnectInProgress = false
 }
 
 /** Explicit user action to remove app access from Google Account settings flow. */

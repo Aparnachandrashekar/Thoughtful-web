@@ -16,6 +16,8 @@ export type GoogleAuthEvent =
   | 'identity_sign_out'
   | 'google_access_revoked'
   | 'auth_migration_applied'
+  | 'oauth_state_validation_failed'
+  | 'oauth_state_cleared'
 
 export function logGoogleAuthEvent(
   event: GoogleAuthEvent,

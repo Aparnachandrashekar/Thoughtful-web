@@ -23,6 +23,7 @@ npx jest __tests__/components/ReminderList.test.tsx
 1. **Google OAuth (GIS Token Client)** — `lib/google.ts`
    - Uses `google.accounts.oauth2.initTokenClient` (popup-based, no redirect URI)
    - **Incremental auth:** sign-in requests `openid email profile` only; Calendar (`https://www.googleapis.com/auth/calendar`) via explicit `connectCalendar()` with `include_granted_scopes: true`
+   - **OAuth state (CSRF):** `lib/googleOAuthState.ts` — random `state` per flow in `sessionStorage`, validated on GIS `TokenResponse.state`, cleared after use (`identity` / `calendar` / `calendar_silent`)
    - Access token stored in localStorage with 55-min expiry; proactive silent refresh 8 min before expiry (calendar grant required)
    - `signOut()` clears local session only — does **not** call `revoke()` (use `revokeGoogleAccess()` for explicit disconnect)
    - Client ID comes from `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, baked into the bundle at build time — **Vercel redeploy required after any env var change**

@@ -6,6 +6,7 @@ declare namespace google.accounts.oauth2 {
   interface TokenResponse {
     access_token: string
     scope?: string
+    state?: string
     error?: string
     error_description?: string
   }
@@ -17,6 +18,7 @@ declare namespace google.accounts.oauth2 {
     include_granted_scopes?: boolean
     prompt?: string
     login_hint?: string
+    state?: string
     error_callback?: (error: { type: string }) => void
   }
 
@@ -24,6 +26,7 @@ declare namespace google.accounts.oauth2 {
     prompt?: string
     login_hint?: string
     scope?: string
+    state?: string
   }
 
   function initTokenClient(config: TokenClientConfig): TokenClient

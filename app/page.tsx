@@ -1078,10 +1078,10 @@ export default function Home() {
             </div>
           )}
 
-          <div className="w-full max-w-full mx-auto flex flex-col items-stretch px-4 sm:px-6">
-            {/* Hero: width follows title; input matches on sm+ */}
+          {/* sm+: one column sized to the title; mobile: hero full width, compact cards below */}
+          <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6">
+            <div className="w-full sm:w-fit max-w-[calc(100vw-2rem)] sm:max-w-none flex flex-col items-stretch">
             <section className="min-h-screen flex flex-col items-center justify-center w-full">
-              <div className="w-full sm:w-fit max-w-full mx-auto flex flex-col items-stretch">
               <h1 className="leading-none text-center w-full">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
@@ -1101,7 +1101,7 @@ export default function Home() {
                 </p>
               )}
               {signedIn && (
-                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
+                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-[17.5rem] sm:max-w-md mx-auto">
                   {copy.helpText}
                 </p>
               )}
@@ -1138,11 +1138,12 @@ export default function Home() {
                   )}
                 </div>
               )}
-              </div>
             </section>
 
             {signedIn && (
-              <section className="w-full max-w-lg mx-auto pb-24 pt-4">
+              <section className="w-full pb-24 pt-4">
+                {/* Mobile: narrower cards; desktop: same width as title column */}
+                <div className="w-full max-w-[17.5rem] mx-auto sm:max-w-none sm:mx-0">
                 {gcalUpdates.length > 0 && (
                   <div className="mb-6 bg-surface rounded-card overflow-hidden divide-y divide-white">
                     {gcalUpdates.map(update => (
@@ -1177,8 +1178,10 @@ export default function Home() {
                   onEdit={handleEdit}
                   newReminderId={newReminderId}
                 />
+                </div>
               </section>
             )}
+            </div>
           </div>
 
       {/* Date Picker Modal */}

@@ -36,18 +36,18 @@ interface ReminderListProps {
   newReminderId?: string | null
 }
 
-const ICON_CLASS = 'w-4 h-4 sm:w-5 sm:h-5'
+const ICON_CLASS = 'w-3.5 h-3.5 sm:w-5 sm:h-5'
 const ACTION_BTN =
-  'p-1.5 sm:p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
+  'p-1 sm:p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
 const SECTION_LABEL =
-  'font-outfit text-sm sm:text-[15px] font-semibold text-ink-muted tracking-wide py-2 sm:py-3'
+  'font-outfit text-xs sm:text-[15px] font-semibold text-ink-muted tracking-wide py-2 sm:py-3'
 const CARD_TITLE =
-  'font-sans text-[15px] sm:text-[17px] font-bold text-ink leading-snug tracking-tight break-words'
-const CARD_META = 'font-outfit text-[13px] sm:text-[14px] text-ink-muted mt-1 font-normal'
+  'font-sans text-[14px] sm:text-[17px] font-bold text-ink leading-snug tracking-tight break-words'
+const CARD_META = 'font-outfit text-[12px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
 const REMINDER_CARD =
   'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
-  'flex items-start gap-2.5 sm:gap-3 px-3.5 py-3.5 sm:px-4 sm:py-4 w-full max-w-full min-w-0'
+  'flex items-start gap-2 sm:gap-3 px-3 py-2.5 sm:px-5 sm:py-4 w-full min-w-0'
 
 function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
   if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
@@ -162,7 +162,7 @@ function ReminderCard({
       {showToggle && (
         <button
           onClick={() => onToggle(reminder.id)}
-          className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-faint
+          className="mt-0.5 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full border-[1.5px] border-ink-faint
                      hover:border-accent flex-shrink-0 transition-colors duration-150"
           aria-label="Mark complete"
         />

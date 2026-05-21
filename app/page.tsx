@@ -6,6 +6,7 @@ import { signInAnonymously } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import ReminderInput from '@/components/ReminderInput'
 import OutlineIcon from '@/components/OutlineIcon'
+import GoogleSignInButton from '@/components/GoogleSignInButton'
 import ThoughtfulTitle from '@/components/ThoughtfulTitle'
 import { copy } from '@/lib/copy'
 import ReminderList, { Reminder } from '@/components/ReminderList'
@@ -1119,13 +1120,11 @@ export default function Home() {
                     </div>
                   ) : googleReady ? (
                     <div className="flex flex-col items-center gap-3">
-                      <button
+                      <GoogleSignInButton
                         onClick={handleGoogleSignIn}
                         disabled={signingIn}
-                        className="font-outfit text-body font-medium text-ink-muted hover:text-accent transition-colors disabled:opacity-50"
-                      >
-                        {signingIn ? copy.signingIn : copy.signIn}
-                      </button>
+                        label={signingIn ? copy.signingIn : copy.signIn}
+                      />
                       {signingIn && (
                         <p className="font-outfit text-body text-ink-faint">{copy.signInHint}</p>
                       )}

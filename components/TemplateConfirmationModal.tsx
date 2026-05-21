@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { CareTemplate } from '@/lib/types'
 import { getRecurrenceLabel, calculateNextReminderDate, getRecurrenceInterval } from '@/lib/templates'
+import TemplateOutlineIcon from '@/components/TemplateOutlineIcon'
 
 interface TemplateConfirmationModalProps {
   template: CareTemplate
@@ -91,8 +92,8 @@ export default function TemplateConfirmationModal({
 
           {/* Header */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-blush-pale rounded-full mb-3">
-              <span className="text-2xl">{template.emoji}</span>
+            <div className="inline-flex items-center justify-center mb-3">
+              <TemplateOutlineIcon templateId={template.id} className="text-accent" />
             </div>
             <h3 className="text-lg font-semibold text-[#2D1810]">Create Reminder</h3>
             <p className="text-sm text-terra/70 mt-1 font-light">

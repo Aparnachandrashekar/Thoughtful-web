@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { RelationshipType, CareTemplate, RELATIONSHIP_LABELS } from '@/lib/types'
 import { getTemplatesForRelationship, getAllTemplates, generateReminderText, getRecurrenceLabel } from '@/lib/templates'
+import TemplateOutlineIcon from '@/components/TemplateOutlineIcon'
 
 interface CareActionsPanelProps {
   personName: string
@@ -67,15 +68,20 @@ export default function CareActionsPanel({
                        animate-fade-up"
             style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'both' }}
           >
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-sm font-medium text-ink">{template.label}</span>
-              <span className="text-[10px] text-ink-faint flex-shrink-0">
-                {getRecurrenceLabel(template.recurrence)}
-              </span>
+            <div className="flex items-start gap-3">
+              <TemplateOutlineIcon templateId={template.id} className="text-accent" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium text-ink">{template.label}</span>
+                  <span className="text-[10px] text-ink-faint flex-shrink-0">
+                    {getRecurrenceLabel(template.recurrence)}
+                  </span>
+                </div>
+                {template.description && (
+                  <p className="text-xs text-ink-muted mt-0.5 font-light line-clamp-1">{template.description}</p>
+                )}
+              </div>
             </div>
-            {template.description && (
-              <p className="text-xs text-ink-muted mt-0.5 font-light line-clamp-1">{template.description}</p>
-            )}
           </button>
         ))}
 
@@ -106,7 +112,10 @@ export default function CareActionsPanel({
                         className="w-full text-left px-3 py-2.5 rounded-card bg-white text-xs
                                    hover:shadow-card transition-all duration-150"
                       >
-                        <span className="text-ink font-medium">{template.label}</span>
+                        <div className="flex items-center gap-2.5">
+                          <TemplateOutlineIcon templateId={template.id} size="sm" className="text-accent" />
+                          <span className="text-ink font-medium">{template.label}</span>
+                        </div>
                       </button>
                     ))}
                   </div>

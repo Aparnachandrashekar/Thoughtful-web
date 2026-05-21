@@ -21,6 +21,7 @@ const config: Config = {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         outfit: ['Outfit', 'system-ui', 'sans-serif'],
         script: ['Dancing Script', 'cursive'],
+        'google-signin': ['Roboto', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         body: ['14px', { lineHeight: '1.45' }],

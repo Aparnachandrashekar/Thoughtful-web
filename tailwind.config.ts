@@ -8,62 +8,73 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: '#FEFAF9',
-        // Terracotta / dusty rose system (from inspo)
-        terra: '#D4756A',
-        'terra-deep': '#B85D52',
-        'terra-muted': '#C4736B',
-        'terra-light': '#EBA89F',
-        'blush-pale': '#FBE8E4',
-        'blush-light': '#F5DDD9',
-        'blush-medium': '#EDD0C9',
-        // Legacy pastel palette (keeps existing components working)
-        blush: '#FFE5E5',
-        lavender: '#E8E0F0',
-        mint: '#E0F2E9',
-        peach: '#FFE8D6',
-        sky: '#E0F0FF',
-        sand: '#F5F0E8',
+        ink: '#5C5C5C',
+        accent: '#2575E6',
+        'accent-hover': '#1A65D6',
+        page: '#FFFFFF',
+        surface: '#F0F7FF',
+        'surface-soft': '#E8F2FF',
+        'ink-muted': '#949494',
+        'ink-faint': '#B8B8B8',
       },
       fontFamily: {
-        sans:   ['DM Sans', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        outfit: ['Outfit', 'system-ui', 'sans-serif'],
         script: ['Dancing Script', 'cursive'],
       },
+      fontSize: {
+        body: ['14px', { lineHeight: '1.45' }],
+      },
       borderRadius: {
-        'xl':   '1rem',
-        '2xl':  '1.5rem',
-        '3xl':  '2rem',
-        '4xl':  '3rem',
-        'pill': '9999px',
+        card: '12px',
+        lg: '16px',
+      },
+      boxShadow: {
+        card: '0 2px 16px rgba(186, 220, 255, 0.22)',
+        'card-hover': '0 4px 24px rgba(186, 220, 255, 0.32)',
+        input: '0 4px 28px rgba(186, 220, 255, 0.28)',
       },
       animation: {
-        'fade-in':    'fadeIn 0.4s ease-out both',
-        'fade-up':    'fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
-        'slide-up':   'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
-        'scale-in':   'scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) both',
-        'pulse-soft': 'pulseSoft 2.4s ease-in-out infinite',
+        'fade-in': 'fadeIn 200ms ease-in-out both',
+        'fade-up': 'fadeUp 400ms ease-out both',
+        'slide-in-left': 'slideInLeft 350ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
+        'slide-out-right': 'slideOutRight 250ms ease-in both',
+        'slide-down-in': 'slideDownIn 300ms ease-out both',
+        'button-pulse': 'buttonPulse 1.5s ease-in-out infinite',
+        'page-in': 'pageIn 200ms ease-in-out both',
       },
       keyframes: {
         fadeIn: {
-          '0%':   { opacity: '0' },
+          '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
         fadeUp: {
-          '0%':   { opacity: '0', transform: 'translateY(20px)' },
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        slideUp: {
-          '0%':   { opacity: '0', transform: 'translateY(100%)' },
+        slideInLeft: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(0)' },
+        },
+        slideOutRight: {
+          '0%': { opacity: '1', transform: 'translateX(0)' },
+          '100%': { opacity: '0', transform: 'translateX(24px)' },
+        },
+        slideDownIn: {
+          '0%': { opacity: '0', transform: 'translateY(-10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        scaleIn: {
-          '0%':   { opacity: '0', transform: 'scale(0.88)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
+        buttonPulse: {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(37, 99, 235, 0.35)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(37, 99, 235, 0)' },
         },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%':      { opacity: '0.6' },
+        pageIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
         },
+      },
+      transitionDuration: {
+        focus: '200ms',
       },
     },
   },

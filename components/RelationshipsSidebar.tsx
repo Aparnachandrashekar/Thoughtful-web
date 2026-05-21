@@ -1,7 +1,10 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { Person, RELATIONSHIP_EMOJI } from '@/lib/types'
+import { useRouter, usePathname } from 'next/navigation'
+import { Person, RELATIONSHIP_LABELS } from '@/lib/types'
+import OutlineIcon from '@/components/OutlineIcon'
+import ThoughtfulTitle from '@/components/ThoughtfulTitle'
+import { copy } from '@/lib/copy'
 
 interface RelationshipsSidebarProps {
   people: Person[]
@@ -16,9 +19,10 @@ export default function RelationshipsSidebar({
   isOpen,
   onToggle,
   userEmail,
-  onSignOut
+  onSignOut,
 }: RelationshipsSidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
 
   const handlePersonClick = (personId: string) => {
     router.push(`/person/${personId}`)
@@ -27,80 +31,77 @@ export default function RelationshipsSidebar({
 
   return (
     <>
-      {/* Backdrop — shown on all screen sizes when open */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/20 z-20 animate-fade-in backdrop-blur-[2px]"
+          className="fixed inset-0 bg-ink/10 z-20 animate-fade-in"
           onClick={onToggle}
+          aria-hidden
         />
       )}
 
-      {/* Sidebar panel — always fixed overlay, never pushes content */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-30
-          w-72 bg-terra flex flex-col
-          transition-transform duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]
-          shadow-[4px_0_32px_rgba(180,80,70,0.18)]
+          fixed inset-y-0 left-0 z-30 w-full max-w-md flex flex-col
+          bg-page transition-transform duration-[350ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-8 pb-5">
-          <h2 className="text-2xl font-bold text-white tracking-wide">Profiles</h2>
+        <div className="relative px-8 pt-10 pb-8 text-center">
           <button
             onClick={onToggle}
-            className="text-white/60 hover:text-white transition-colors p-1"
+            className="absolute top-8 right-6 p-2 text-ink-muted hover:text-accent transition-colors"
             aria-label="Close sidebar"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <OutlineIcon name="close" size="lg" />
           </button>
+          <OutlineIcon name="profiles" size="lg" className="text-ink-muted mx-auto mb-5" />
+          <h2>
+            <ThoughtfulTitle variant="section">{copy.profiles}</ThoughtfulTitle>
+          </h2>
         </div>
 
-        {/* People list */}
-        <div className="flex-1 px-4 pb-4 overflow-y-auto space-y-2">
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
           {people.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-white/55 leading-relaxed">
-              No profiles yet. Create a reminder about someone to get started.
+            <p className="text-center text-sm text-ink-muted font-light leading-relaxed py-12 px-4">
+              {copy.profilesEmpty}
             </p>
           ) : (
-            people.map((person, i) => (
-              <button
-                key={person.id}
-                onClick={() => handlePersonClick(person.id)}
-                className="w-full flex items-center gap-3 px-5 py-3.5
-                           bg-terra-deep/60 hover:bg-terra-deep
-                           rounded-2xl transition-all duration-200
-                           active:scale-[0.97] text-left
-                           animate-fade-up"
-                style={{ animationDelay: `${i * 45}ms`, animationFillMode: 'both' }}
-              >
-                <span className="text-sm font-semibold text-white truncate flex-1">
-                  {person.name}
-                </span>
-                <span className="text-sm opacity-70" title={person.relationshipType}>
-                  {RELATIONSHIP_EMOJI[person.relationshipType]}
-                </span>
-              </button>
-            ))
+            <ul className="space-y-10">
+              {people.map((person) => {
+                const isSelected = pathname === `/person/${person.id}`
+                return (
+                  <li key={person.id}>
+                    <button
+                      onClick={() => handlePersonClick(person.id)}
+                      className={`
+                        w-full flex flex-col items-center text-center py-2
+                        transition-opacity duration-150
+                        ${isSelected ? 'opacity-100' : 'opacity-80 hover:opacity-100'}
+                      `}
+                    >
+                      <span className="block leading-none">
+                        <ThoughtfulTitle variant="profile">{person.name}</ThoughtfulTitle>
+                      </span>
+                      <p className="text-xs text-ink-muted mt-3 font-light tracking-wide">
+                        {RELATIONSHIP_LABELS[person.relationshipType]}
+                      </p>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </div>
 
-        {/* Bottom: email + sign out */}
         {userEmail && onSignOut && (
-          <div className="px-6 py-6 border-t border-white/10">
-            <p className="text-xs text-white/40 truncate mb-3">{userEmail}</p>
+          <div className="px-8 py-8 bg-page">
+            <p className="text-xs text-ink-faint text-center truncate mb-4 font-light">{userEmail}</p>
             <button
               onClick={onSignOut}
-              className="flex items-center gap-1.5 text-white font-bold text-sm
-                         hover:text-white/70 transition-colors group"
+              className="w-full flex flex-col items-center gap-2 text-ink-muted hover:text-accent transition-colors"
             >
-              Sign out
-              <span className="inline-block transition-transform duration-200 group-hover:translate-x-1">
-                →
-              </span>
+              <OutlineIcon name="signOut" size="lg" />
+              <span className="text-sm font-light">{copy.signOut}</span>
             </button>
           </div>
         )}

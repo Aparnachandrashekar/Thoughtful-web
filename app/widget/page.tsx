@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { parseReminder } from '@/lib/parser'
 import { generateTitle } from '@/lib/ai'
+import { copy } from '@/lib/copy'
+import ReminderInput from '@/components/ReminderInput'
+import { getRemindersKey } from '@/lib/google'
 
 interface WidgetReminder {
   id: string
@@ -25,34 +28,39 @@ function formatDate(date: Date): string {
 }
 
 export default function Widget() {
-  const [text, setText] = useState('')
   const [reminders, setReminders] = useState<WidgetReminder[]>([])
   const [status, setStatus] = useState<string | null>(null)
 
-  useEffect(() => {
-    const saved = localStorage.getItem('thoughtful-reminders')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      const upcoming = parsed
-        .filter((r: { isCompleted: boolean }) => !r.isCompleted)
-        .map((r: WidgetReminder) => ({ ...r, date: new Date(r.date) }))
-        .sort((a: WidgetReminder, b: WidgetReminder) => a.date.getTime() - b.date.getTime())
-        .slice(0, 5)
-      setReminders(upcoming)
+  const loadReminders = useCallback(() => {
+    try {
+      const key = getRemindersKey()
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        const upcoming = parsed
+          .filter((r: { isCompleted: boolean }) => !r.isCompleted)
+          .map((r: WidgetReminder) => ({ ...r, date: new Date(r.date) }))
+          .sort((a: WidgetReminder, b: WidgetReminder) => a.date.getTime() - b.date.getTime())
+          .slice(0, 5)
+        setReminders(upcoming)
+      }
+    } catch {
+      setReminders([])
     }
   }, [])
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!text.trim()) return
+  useEffect(() => {
+    loadReminders()
+  }, [loadReminders])
 
-    const result = parseReminder(text.trim())
+  const handleSubmit = useCallback(async (input: string) => {
+    const result = parseReminder(input)
     const date = result.date || new Date(Date.now() + 24 * 60 * 60 * 1000)
     if (!result.date) {
       date.setHours(8, 0, 0, 0)
     }
 
-    const friendlyTitle = await generateTitle(text.trim())
+    const friendlyTitle = await generateTitle(input)
 
     const newReminder = {
       id: Date.now().toString(),
@@ -61,66 +69,48 @@ export default function Widget() {
       isCompleted: false,
     }
 
-    // Save to shared localStorage
-    const saved = localStorage.getItem('thoughtful-reminders')
+    const key = getRemindersKey()
+    const saved = localStorage.getItem(key)
     const all = saved ? JSON.parse(saved) : []
     all.unshift(newReminder)
-    localStorage.setItem('thoughtful-reminders', JSON.stringify(all))
+    localStorage.setItem(key, JSON.stringify(all))
 
     setReminders(prev => [{ id: newReminder.id, text: friendlyTitle, date }, ...prev].slice(0, 5))
-    setText('')
     setStatus('Saved')
     setTimeout(() => setStatus(null), 1500)
-  }, [text])
+  }, [])
 
   return (
-    <div className="min-h-screen bg-cream p-4 font-sans">
-      <div className="max-w-sm mx-auto">
-        {/* Compact header */}
-        <h1 className="text-lg font-semibold text-gray-700 mb-3">Thoughtful</h1>
+    <div className="min-h-screen bg-page p-4 sm:p-5 font-sans w-full max-w-md mx-auto">
+      <h1 className="font-sans text-xl font-bold text-ink tracking-tight">{copy.appName}</h1>
+      <p className="font-script text-[16px] italic text-ink-muted mt-1 leading-snug">{copy.tagline}</p>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="mb-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Call mom tomorrow at 3pm..."
-              className="flex-1 px-3 py-2 text-sm bg-white border-2 border-lavender/50 rounded-xl
-                         placeholder:text-gray-400 focus:border-lavender focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              className="px-3 py-2 bg-lavender text-gray-700 text-sm font-medium rounded-xl
-                         disabled:opacity-40 active:scale-95 transition-all"
-            >
-              Add
-            </button>
-          </div>
-          {status && (
-            <p className="text-xs text-green-600 mt-1 animate-fade-in">{status}</p>
-          )}
-        </form>
-
-        {/* Upcoming reminders */}
-        {reminders.length > 0 && (
-          <div>
-            <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-              Upcoming
-            </h2>
-            <div className="space-y-2">
-              {reminders.map((r) => (
-                <div key={r.id} className="bg-white/70 px-3 py-2 rounded-xl">
-                  <p className="text-sm text-gray-700">{r.text}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(r.date)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="mt-4">
+        <ReminderInput compact onSubmit={handleSubmit} />
       </div>
+
+      {status && (
+        <p className="font-outfit text-body text-accent mt-2 animate-fade-in">{status}</p>
+      )}
+
+      {reminders.length > 0 && (
+        <div className="mt-5">
+          <p className="font-outfit text-[15px] font-semibold text-ink-muted tracking-wide mb-2">
+            {copy.sectionUpcoming}
+          </p>
+          <div className="flex flex-col gap-[3px]">
+            {reminders.map((r) => (
+              <div
+                key={r.id}
+                className="reminder-card bg-page rounded-card border-[0.5px] border-accent/20 px-4 py-3.5"
+              >
+                <p className="font-sans text-[15px] font-bold text-ink leading-snug">{r.text}</p>
+                <p className="font-outfit text-[13px] text-ink-muted mt-1">{formatDate(r.date)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

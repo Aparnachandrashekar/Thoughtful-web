@@ -5,6 +5,9 @@ import Script from 'next/script'
 import { signInAnonymously } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import ReminderInput from '@/components/ReminderInput'
+import OutlineIcon from '@/components/OutlineIcon'
+import ThoughtfulTitle from '@/components/ThoughtfulTitle'
+import { copy } from '@/lib/copy'
 import ReminderList, { Reminder } from '@/components/ReminderList'
 import DatePickerModal from '@/components/DatePickerModal'
 import EditReminderModal from '@/components/EditReminderModal'
@@ -95,6 +98,7 @@ export default function Home() {
   const [firebaseReady, setFirebaseReady] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [newReminderId, setNewReminderId] = useState<string | null>(null)
   const [gcalUpdates, setGcalUpdates] = useState<Array<{ id: string; text: string; change: string }>>([])
 
   // For date picker fallback
@@ -470,6 +474,11 @@ export default function Home() {
             console.error('Failed to create Thoughtful calendar:', err)
           })
         }
+        const pending = sessionStorage.getItem('thoughtful-pending-input')
+        if (pending) {
+          sessionStorage.removeItem('thoughtful-pending-input')
+          setTimeout(() => handleAddReminder(pending), 300)
+        }
       },
       (reason) => {
         clearTimeout(signingInTimeout)
@@ -610,6 +619,8 @@ export default function Home() {
       setReminders(prev => prev.map(r => r.id === id ? newReminder : r))
     } else {
       setReminders(prev => [newReminder, ...prev])
+      setNewReminderId(id)
+      setTimeout(() => setNewReminderId(null), 3000)
     }
 
     // Sync reminder to Firestore
@@ -715,6 +726,13 @@ export default function Home() {
   }, [userEmail, refreshPeople, signedIn])
 
   const handleAddReminder = (text: string) => {
+    if (!signedIn) {
+      sessionStorage.setItem('thoughtful-pending-input', text)
+      setStatus(copy.signInSaveReminder)
+      setTimeout(() => setStatus(null), 5000)
+      return
+    }
+
     // Check if this is an update request — must start with "update " to avoid false positives
     const lowerText = text.toLowerCase()
     const isUpdateRequest = /^update\s/i.test(lowerText)
@@ -932,7 +950,7 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen"
+      className="app-canvas min-h-screen bg-page animate-page-in"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -943,10 +961,10 @@ export default function Home() {
           className="fixed top-0 inset-x-0 z-50 flex justify-center transition-transform"
           style={{ transform: `translateY(${isRefreshing ? 16 : pullDistance - 32}px)` }}
         >
-          <div className={`w-9 h-9 rounded-full bg-white shadow-lg border border-blush-light
+          <div className={`w-9 h-9 rounded-full bg-surface shadow-card
                            flex items-center justify-center
                            ${isRefreshing ? 'animate-spin' : ''}`}>
-            <svg className="w-4 h-4 text-terra" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -978,75 +996,59 @@ export default function Home() {
         />
       )}
 
-      <main className="px-5 sm:px-8 md:px-14 py-8 sm:py-10 md:py-14">
-        <div className="max-w-3xl mx-auto">
-
-          {/* Top bar: only shown when signed in */}
+      <main className="relative z-10 w-full bg-page">
+          {/* Signed-in toolbar — floats over hero */}
           {signedIn && (
-            <div className="flex items-center justify-between mb-8 sm:mb-10 animate-fade-in">
+            <header className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-5 sm:px-8 max-w-3xl mx-auto">
               <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-terra hover:text-terra-deep transition-colors p-1 -ml-1"
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 text-ink-muted hover:text-accent transition-colors"
                 aria-label="Open profiles"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                <OutlineIcon name="profiles" size="lg" />
               </button>
-              <div className="flex items-center gap-2">
-                {/* Manual refresh button for PWA — browser refresh unavailable in standalone mode */}
-                <button
-                  onClick={() => { syncFromFirestore(true); checkForCalendarChanges() }}
-                  className="p-2 text-terra/40 hover:text-terra rounded-xl hover:bg-blush-pale
-                             transition-all duration-150"
-                  title="Refresh"
-                  aria-label="Refresh"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
+              <div className="flex items-center gap-1">
                 {googleReady && !calendarConnected && !refreshingCalendar && (
                   <button
+                    type="button"
                     onClick={handleConnectCalendar}
                     disabled={connectingCalendar}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-xs font-medium
-                               text-terra border border-terra/30 hover:bg-blush-pale
-                               transition-all duration-200 active:scale-95
-                               disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 text-ink-muted hover:text-accent rounded-card transition-colors disabled:opacity-40"
+                    title="Connect Google Calendar"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 000-2H5a1 1 0 000 2zm0 0v.01" />
-                    </svg>
-                    {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
+                    <OutlineIcon name="calendar" size="lg" />
                   </button>
                 )}
+                <button
+                  onClick={() => { syncFromFirestore(true); checkForCalendarChanges() }}
+                  className="p-2 text-ink-muted hover:text-accent transition-colors"
+                  title="Sync"
+                  aria-label="Sync"
+                >
+                  <OutlineIcon name="refresh" size="lg" />
+                </button>
+                <button
+                  onClick={handleGoogleSignOut}
+                  className="p-2 text-ink-muted hover:text-accent transition-colors"
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  <OutlineIcon name="signOut" size="lg" />
+                </button>
               </div>
-            </div>
+            </header>
           )}
-
-          {/* Hero header */}
-          <div className="text-center mb-10 sm:mb-14 animate-fade-up">
-            <h1 className="font-script text-6xl sm:text-7xl md:text-8xl text-terra leading-none select-none">
-              Thoughtful
-            </h1>
-            <p className="mt-8 sm:mt-10 text-terra/75 text-sm sm:text-base font-light tracking-wide">
-              An easy way to remember things that matter
-            </p>
-          </div>
 
           {/* Notifications blocked banner */}
           {notificationsBlocked && (
-            <div className="text-center mb-4 animate-scale-in">
-              <span className="inline-flex items-center gap-2 text-xs text-amber-700
-                               bg-amber-50 px-4 py-2.5 rounded-pill border border-amber-200">
+            <div className="relative z-20 px-5 sm:px-8 max-w-3xl mx-auto pt-4 mb-4 animate-fade-in">
+              <span className="inline-flex items-center gap-2 text-xs text-ink-muted
+                               bg-surface px-4 py-2.5 rounded-card">
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                Notifications are blocked. Enable them in your browser settings.
+                {copy.notificationsBlocked}
                 <button
                   onClick={async () => {
                     if (typeof Notification !== 'undefined') {
@@ -1060,7 +1062,7 @@ export default function Home() {
                   }}
                   className="underline hover:no-underline font-medium"
                 >
-                  Check again
+                  {copy.checkAgain}
                 </button>
                 <button onClick={() => setNotificationsBlocked(false)} className="ml-1 opacity-50 hover:opacity-100">✕</button>
               </span>
@@ -1069,145 +1071,114 @@ export default function Home() {
 
           {/* Status toast */}
           {status && (
-            <div className="text-center mb-6 animate-scale-in">
-              <span className="inline-block text-xs sm:text-sm text-terra-deep/80 font-light
-                               bg-blush-pale px-5 py-2.5 rounded-pill border border-blush-light">
+            <div className="relative z-20 px-5 sm:px-8 max-w-3xl mx-auto pt-2 mb-2 animate-fade-in">
+              <span className="inline-block font-outfit text-body text-ink-muted font-light bg-surface px-4 py-2 rounded-card">
                 {status}
               </span>
             </div>
           )}
 
-          {/* Signed-in content */}
-          {signedIn ? (
-            <>
-              {/* Calendar connect prompt */}
-              {googleReady && !calendarConnected && !refreshingCalendar && (
-                <div className="text-center mb-6 animate-fade-up">
-                  <button
-                    type="button"
-                    onClick={handleConnectCalendar}
-                    disabled={connectingCalendar}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-pill text-xs font-medium
-                               text-terra border border-terra/30 hover:bg-blush-pale
-                               transition-all duration-200 active:scale-95
-                               disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {connectingCalendar ? 'Connecting Google Calendar…' : 'Connect Google Calendar'}
-                  </button>
-                </div>
-              )}
-
-              {/* Input */}
-              <div className="mb-10">
-                <ReminderInput onSubmit={handleAddReminder} />
+          {/* Shared column width = title width; input & cards match */}
+          <div className="w-fit max-w-[calc(100vw-2.5rem)] mx-auto flex flex-col items-stretch px-4 sm:px-0">
+            {/* Landing viewport — title + input only */}
+            <section className="min-h-screen flex flex-col items-center justify-center w-full">
+              <h1 className="leading-none text-center w-full">
+                <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
+              </h1>
+              <p className="font-script text-[20px] italic text-ink-muted mt-6 text-center leading-snug">
+                {copy.tagline}
+              </p>
+              <div className="w-full mt-8">
+                <ReminderInput hero onSubmit={handleAddReminder} />
               </div>
-
-
-              {/* Help text */}
-              <div className="text-center mb-8 animate-fade-up delay-300">
-                <p className="text-xs text-terra/60 font-light leading-relaxed">
-                  To edit, type <span className="italic">&quot;update [event name] to&hellip;&quot;</span>
-                  &nbsp;·&nbsp; Recurring: &quot;every Friday&quot;, &quot;last Saturday of the month&quot;
+              {signedIn && googleReady && !calendarConnected && !refreshingCalendar && (
+                <p className="mt-4 font-outfit text-body text-accent font-medium text-center">
+                  {connectingCalendar ? copy.connectingCalendar : (
+                    <button type="button" onClick={handleConnectCalendar} className="hover:underline">
+                      {copy.connectCalendar}
+                    </button>
+                  )}
                 </p>
-              </div>
-
-              {/* GCal change notifications */}
-              {gcalUpdates.length > 0 && (
-                <div className="mb-6 space-y-2 animate-fade-up">
-                  {gcalUpdates.map(update => (
-                    <div
-                      key={update.id}
-                      className="flex items-start gap-3 px-4 py-3.5
-                                 bg-blush-pale border border-blush-medium/50 rounded-2xl"
-                    >
-                      <svg className="w-4 h-4 text-terra mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="flex-1 text-sm text-terra-deep/80 font-light">
-                        <span className="font-medium">Calendar update:</span>{' '}
-                        &quot;{update.text}&quot; — {update.change}
+              )}
+              {signedIn && (
+                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
+                  {copy.helpText}
+                </p>
+              )}
+              {!signedIn && (
+                <div className="mt-8 w-full text-center">
+                  {gisLoadError ? (
+                    <div className="space-y-2">
+                      <p className="font-outfit text-body text-ink-muted">{copy.gisLoadError}</p>
+                      <p className="font-outfit text-body text-ink-faint max-w-xs mx-auto">
+                        {copy.gisLoadErrorDetail}
                       </p>
-                      <button
-                        onClick={() => setGcalUpdates(prev => prev.filter(u => u.id !== update.id))}
-                        className="text-terra/30 hover:text-terra/60 flex-shrink-0 transition-colors"
-                        aria-label="Dismiss"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                      <button onClick={() => window.location.reload()} className="font-outfit text-body text-accent font-medium">
+                        {copy.refreshPage}
                       </button>
                     </div>
-                  ))}
+                  ) : googleReady ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <button
+                        onClick={handleGoogleSignIn}
+                        disabled={signingIn}
+                        className="font-outfit text-body font-medium text-ink-muted hover:text-accent transition-colors disabled:opacity-50"
+                      >
+                        {signingIn ? copy.signingIn : copy.signIn}
+                      </button>
+                      {signingIn && (
+                        <p className="font-outfit text-body text-ink-faint">{copy.signInHint}</p>
+                      )}
+                      {signInTimedOut && (
+                        <p className="font-outfit text-body text-ink-faint max-w-xs mx-auto">{copy.signInTimedOut}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="font-outfit text-body text-ink-faint">{copy.loading}</p>
+                  )}
                 </div>
               )}
+            </section>
 
-              {/* Reminders */}
-              <ReminderList
-                reminders={reminders}
-                people={people}
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-              />
-            </>
-          ) : (
-            <div className="text-center py-10 animate-fade-up delay-200">
-              {gisLoadError ? (
-                <div className="flex flex-col items-center gap-3">
-                  <p className="text-sm text-terra/75 font-light">
-                    Google sign-in couldn't load.
-                  </p>
-                  <p className="text-xs text-terra/65 font-light max-w-xs">
-                    This is usually caused by an ad blocker or network restriction. Try disabling it for this page, then refresh.
-                  </p>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="mt-1 text-xs text-terra underline hover:no-underline"
-                  >
-                    Refresh page
-                  </button>
-                </div>
-              ) : googleReady ? (
-                <div className="flex flex-col items-center gap-3">
-                  <button
-                    onClick={handleGoogleSignIn}
-                    disabled={signingIn}
-                    className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-white
-                               border border-blush-light rounded-pill text-sm font-medium text-terra-deep
-                               hover:border-terra/30 hover:shadow-[0_4px_20px_rgba(212,117,106,0.18)]
-                               transition-all duration-250 active:scale-95
-                               disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    {signingIn ? 'Opening Google…' : 'Sign in with Google'}
-                  </button>
-                  {signingIn && (
-                    <p className="text-xs text-terra/65 font-light">
-                      Complete sign-in in the Google window, then return here
-                    </p>
-                  )}
-                  {signInTimedOut && (
-                    <p className="text-xs text-terra/70 font-light max-w-xs">
-                      The sign-in window didn't complete. If it was blocked, allow popups for this site and try again.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-terra/65 text-sm font-light">Loading…</p>
-              )}
-            </div>
-          )}
-      </div>
+            {signedIn && (
+              <section className="w-full pb-24 pt-4">
+                {gcalUpdates.length > 0 && (
+                  <div className="mb-6 bg-surface rounded-card overflow-hidden divide-y divide-white">
+                    {gcalUpdates.map(update => (
+                      <div key={update.id} className="flex items-start gap-3 px-5 py-3.5">
+                        <svg className="w-3.5 h-3.5 text-ink-muted mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p className="flex-1 font-outfit text-body text-ink-muted font-light">
+                          <span className="font-medium text-ink">{copy.calendarUpdate}</span>{' '}
+                          &quot;{update.text}&quot; — {update.change}
+                        </p>
+                        <button
+                          onClick={() => setGcalUpdates(prev => prev.filter(u => u.id !== update.id))}
+                          className="text-ink-faint hover:text-ink flex-shrink-0 transition-colors p-2"
+                          aria-label="Dismiss"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <ReminderList
+                  reminders={reminders}
+                  people={people}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  newReminderId={newReminderId}
+                />
+              </section>
+            )}
+          </div>
 
       {/* Date Picker Modal */}
       {pendingText && (
@@ -1254,13 +1225,13 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="text-center py-8 px-5">
-        <div className="flex items-center justify-center gap-4 text-xs text-terra/60 font-light">
-          <a href="/privacy" className="hover:text-terra transition-colors">Privacy</a>
+      <footer className="text-center py-8 px-5 bg-page">
+        <div className="flex items-center justify-center gap-4 font-outfit text-body text-ink-faint font-light">
+          <a href="/privacy" className="hover:text-accent transition-colors">Privacy</a>
           <span>·</span>
-          <a href="/terms" className="hover:text-terra transition-colors">Terms</a>
+          <a href="/terms" className="hover:text-accent transition-colors">Terms</a>
           <span>·</span>
-          <a href="mailto:aparnacs008@gmail.com" className="hover:text-terra transition-colors">Contact</a>
+          <a href="mailto:aparnacs008@gmail.com" className="hover:text-accent transition-colors">Contact</a>
           <span>·</span>
           <span>v1.0.0</span>
         </div>

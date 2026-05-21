@@ -6,9 +6,21 @@ export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
-    // When a new service worker takes over (via skipWaiting), reload the page
-    // so the PWA immediately runs the latest code without requiring reinstall.
+    // Dev server rebuilds constantly — SW caches break HMR and cause blank/glitchy pages
+    if (process.env.NODE_ENV === 'development') {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister())
+      })
+      return
+    }
+
+    // Reload only when an existing SW is replaced — not on first install (avoids flash/reload loop on load)
+    let hadController = !!navigator.serviceWorker.controller
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) {
+        hadController = true
+        return
+      }
       window.location.reload()
     })
 

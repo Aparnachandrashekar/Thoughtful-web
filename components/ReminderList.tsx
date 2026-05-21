@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Person } from '@/lib/types'
 import { formatDate } from '@/lib/dateFormat'
 import WhatsAppButton from '@/components/WhatsAppButton'
+import { copy } from '@/lib/copy'
 
 export interface Reminder {
   id: string
@@ -17,7 +18,6 @@ export interface Reminder {
   isRecurring?: boolean
   isBirthday?: boolean
   isAnniversary?: boolean
-  // WhatsApp / trigger fields
   message?: string
   personName?: string
   phoneNumber?: string
@@ -33,8 +33,17 @@ interface ReminderListProps {
   onToggle: (id: string) => void
   onDelete: (id: string) => void
   onEdit?: (id: string) => void
+  newReminderId?: string | null
 }
 
+const ICON_CLASS = 'w-5 h-5'
+const ACTION_BTN = 'p-2.5 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
+const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
+const SECTION_LABEL = 'font-outfit text-[15px] font-semibold text-ink-muted tracking-wide py-3'
+const CARD_TITLE = 'font-sans text-[17px] font-bold text-ink leading-snug tracking-tight'
+const CARD_META = 'font-outfit text-[14px] text-ink-muted mt-1.5 font-normal'
+const REMINDER_CARD =
+  'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 flex items-start gap-3 px-5 py-5'
 
 function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
   if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
@@ -56,20 +65,16 @@ function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
 }
 
 function recurringLabel(reminder: Reminder): string {
-  if (reminder.isBirthday) return 'Yearly · Birthday'
-  if (reminder.isAnniversary) return 'Yearly · Anniversary'
+  if (reminder.isBirthday) return 'Birthday · yearly'
+  if (reminder.isAnniversary) return 'Anniversary · yearly'
   return 'Recurring'
 }
 
-function recurringEmoji(reminder: Reminder): string {
-  if (reminder.isBirthday) return '🎂'
-  if (reminder.isAnniversary) return '💝'
-  return '🔄'
-}
-
-// Shared action buttons used in both Upcoming and Recurring cards
 function ActionButtons({
-  reminder, people, onEdit, onDelete
+  reminder,
+  people,
+  onEdit,
+  onDelete,
 }: {
   reminder: Reminder
   people?: Person[]
@@ -77,11 +82,6 @@ function ActionButtons({
   onDelete: (id: string) => void
 }) {
   const phone = findPhoneForReminder(reminder, people)
-
-  // Link to the day view in Google Calendar rather than the specific event URL.
-  // The event htmlLink (https://www.google.com/calendar/event?eid=...) fails on iOS
-  // when the Google Calendar app can't resolve it cross-account. The day view URL
-  // always works as long as the user is signed into Google in Safari.
   const calendarDayUrl = (reminder.calendarHtmlLink || reminder.calendarEventId)
     ? (() => {
         const d = reminder.date instanceof Date ? reminder.date : new Date(reminder.date)
@@ -96,66 +96,133 @@ function ActionButtons({
           href={calendarDayUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="p-1.5 text-terra/40 hover:text-terra rounded-xl
-                     hover:bg-blush-pale transition-all duration-150"
+          className={ACTION_BTN}
           title="View in Google Calendar"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </a>
       )}
       {onEdit && (
-        <button
-          onClick={() => onEdit(reminder.id)}
-          className="p-1.5 text-terra/40 hover:text-terra rounded-xl
-                     hover:bg-blush-pale transition-all duration-150"
-          title="Edit"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        <button onClick={() => onEdit(reminder.id)} className={ACTION_BTN} title="Edit">
+          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
         </button>
       )}
-      <WhatsAppButton phone={phone} />
-      <button
-        onClick={() => onDelete(reminder.id)}
-        className="p-1.5 text-terra/40 hover:text-red-400 rounded-xl
-                   hover:bg-red-50 transition-all duration-150"
-        title="Delete"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      <WhatsAppButton phone={phone} className={ACTION_BTN} />
+      <button onClick={() => onDelete(reminder.id)} className={ACTION_BTN} title="Delete">
+        <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
     </div>
   )
 }
 
-export default function ReminderList({ reminders, people, onToggle, onDelete, onEdit }: ReminderListProps) {
+function ReminderCard({
+  reminder,
+  index,
+  isNew,
+  isExiting,
+  people,
+  onToggle,
+  onEdit,
+  onDelete,
+  showToggle = true,
+}: {
+  reminder: Reminder
+  index: number
+  isNew: boolean
+  isExiting: boolean
+  people?: Person[]
+  onToggle: (id: string) => void
+  onEdit?: (id: string) => void
+  onDelete: (id: string) => void
+  showToggle?: boolean
+}) {
+  const animClass = isExiting
+    ? 'animate-slide-out-right pointer-events-none'
+    : isNew
+    ? 'animate-slide-down-in'
+    : `animate-fade-up stagger-${Math.min(index, 10)}`
+
+  return (
+    <div
+      className={`${REMINDER_CARD} ${animClass}`}
+      style={!isExiting && !isNew ? { animationFillMode: 'both' } : undefined}
+    >
+      {showToggle && (
+        <button
+          onClick={() => onToggle(reminder.id)}
+          className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-faint
+                     hover:border-accent flex-shrink-0 transition-colors duration-150"
+          aria-label="Mark complete"
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <p className={CARD_TITLE}>{reminder.text}</p>
+        <p className={CARD_META}>
+          {formatDate(reminder.date, new Date())}
+          {reminder.isRecurring && (
+            <span className="text-ink-faint"> · {recurringLabel(reminder)}</span>
+          )}
+        </p>
+      </div>
+      <ActionButtons reminder={reminder} people={people} onEdit={onEdit} onDelete={onDelete} />
+    </div>
+  )
+}
+
+function ReminderGroup({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-[3px]">{children}</div>
+}
+
+export default function ReminderList({
+  reminders,
+  people,
+  onToggle,
+  onDelete,
+  onEdit,
+  newReminderId,
+}: ReminderListProps) {
   const [showCompleted, setShowCompleted] = useState(true)
   const [showRecurring, setShowRecurring] = useState(true)
   const [now, setNow] = useState(() => new Date())
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set())
 
-  // Re-render every minute so expired reminders move to History automatically (#17)
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60_000)
     return () => clearInterval(interval)
   }, [])
 
+  const runExit = useCallback((id: string, action: () => void) => {
+    setExitingIds(prev => new Set(prev).add(id))
+    setTimeout(() => {
+      action()
+      setExitingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }, 250)
+  }, [])
+
+  const handleDelete = (id: string) => runExit(id, () => onDelete(id))
+  const handleToggle = (id: string) => runExit(id, () => onToggle(id))
+
   if (reminders.length === 0) {
     return (
-      <div className="text-center py-16 animate-fade-in">
-        <p className="text-terra/65 text-base font-light">No reminders yet</p>
-        <p className="text-terra/55 text-sm mt-1 font-light">Add one above to get started</p>
+      <div className="text-center py-12 animate-fade-in">
+        <p className={`${CARD_TITLE} text-ink-muted`}>{copy.remindersEmpty}</p>
+        <p className={`${CARD_META} text-ink-faint`}>{copy.remindersEmptyHint}</p>
       </div>
     )
   }
 
-
-  // Recurring reminders get their own section — never fall into History
   const recurring = reminders
     .filter(r => r.isRecurring && !r.isCompleted)
     .sort((a, b) => a.date.getTime() - b.date.getTime())
@@ -163,176 +230,115 @@ export default function ReminderList({ reminders, people, onToggle, onDelete, on
   const nonRecurring = reminders.filter(r => !r.isRecurring)
   const upcoming = nonRecurring
     .filter(r => !r.isCompleted && r.date >= now)
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .sort((a, b) => {
+      const aCreated = a.createdAt ?? (parseInt(a.id, 10) || 0)
+      const bCreated = b.createdAt ?? (parseInt(b.id, 10) || 0)
+      if (bCreated !== aCreated) return bCreated - aCreated
+      return a.date.getTime() - b.date.getTime()
+    })
+
   const completed = nonRecurring.filter(r => r.isCompleted || r.date < now)
 
   return (
-    <div className="space-y-8">
-
-      {/* ── Upcoming ── */}
+    <div className="w-full">
       {upcoming.length > 0 && (
-        <div className="animate-fade-up delay-100">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/70 uppercase tracking-[0.15em]">
-              Upcoming
-            </span>
-            <span className="text-xs text-terra/55 font-light">{upcoming.length}</span>
-            <div className="flex-1 h-px bg-terra/10" />
-          </div>
-
-          <div className="space-y-3">
+        <div>
+          <hr className={SECTION_RULE} />
+          <p className={SECTION_LABEL}>{copy.sectionUpcoming}</p>
+          <ReminderGroup>
             {upcoming.map((reminder, index) => (
-              <div
+              <ReminderCard
                 key={reminder.id}
-                className="group bg-white rounded-2xl px-6 py-5
-                           border border-blush-light/60
-                           shadow-[0_2px_12px_rgba(212,117,106,0.06)]
-                           hover:shadow-[0_6px_24px_rgba(212,117,106,0.12)]
-                           hover:-translate-y-0.5
-                           transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
-                           animate-fade-up"
-                style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
-              >
-                <div className="flex items-start gap-3.5">
-                  {/* Circle toggle */}
-                  <button
-                    onClick={() => onToggle(reminder.id)}
-                    className="mt-0.5 w-5 h-5 rounded-full border-2 border-terra/30
-                               hover:border-terra hover:bg-terra/10
-                               flex-shrink-0 transition-all duration-200 active:scale-90"
-                    aria-label="Mark complete"
-                  />
-                  {/* Text */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[#2D1810] font-medium text-sm sm:text-base leading-snug">
-                      {reminder.text}
-                    </p>
-                    <p className="text-terra/70 text-xs sm:text-sm mt-1 font-light">
-                      {formatDate(reminder.date, now)}
-                    </p>
-                  </div>
-                  <ActionButtons reminder={reminder} people={people} onEdit={onEdit} onDelete={onDelete} />
-                </div>
-              </div>
+                reminder={reminder}
+                index={index}
+                isNew={reminder.id === newReminderId}
+                isExiting={exitingIds.has(reminder.id)}
+                people={people}
+                onToggle={handleToggle}
+                onEdit={onEdit}
+                onDelete={handleDelete}
+              />
             ))}
-          </div>
+          </ReminderGroup>
         </div>
       )}
 
-      {/* ── Recurring ── */}
       {recurring.length > 0 && (
-        <div className="animate-fade-up delay-150">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/70 uppercase tracking-[0.15em]">
-              Recurring
-            </span>
-            <span className="text-xs text-terra/55 font-light">{recurring.length}</span>
-            <div className="flex-1 h-px bg-terra/10" />
+        <div className={upcoming.length > 0 ? 'mt-8' : ''}>
+          {upcoming.length === 0 && <hr className={SECTION_RULE} />}
+          <div className="flex items-center">
+            <p className={`${SECTION_LABEL} flex-1`}>{copy.sectionRecurring}</p>
             <button
               onClick={() => setShowRecurring(!showRecurring)}
-              className="text-xs text-terra/30 hover:text-terra/60 transition-colors px-2 py-0.5
-                         rounded-pill hover:bg-blush-pale"
+              className="font-outfit text-body text-ink-faint hover:text-accent transition-colors pr-1"
             >
-              {showRecurring ? 'Hide' : 'Show'}
+              {showRecurring ? copy.hide : copy.show}
             </button>
           </div>
-
           {showRecurring && (
-            <div className="space-y-3">
+            <ReminderGroup>
               {recurring.map((reminder, index) => (
-                <div
+                <ReminderCard
                   key={reminder.id}
-                  className="group bg-white rounded-2xl px-6 py-5
-                             border border-blush-light/60
-                             shadow-[0_2px_12px_rgba(212,117,106,0.06)]
-                             hover:shadow-[0_6px_24px_rgba(212,117,106,0.12)]
-                             hover:-translate-y-0.5
-                             transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
-                             animate-fade-up"
-                  style={{ animationDelay: `${index * 55}ms`, animationFillMode: 'both' }}
-                >
-                  <div className="flex items-start gap-3.5">
-                    <span className="mt-0.5 text-base flex-shrink-0">
-                      {recurringEmoji(reminder)}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[#2D1810] font-medium text-sm sm:text-base leading-snug">
-                        {reminder.text}
-                      </p>
-                      <p className="text-terra/70 text-xs sm:text-sm mt-1 font-light">
-                        {formatDate(reminder.date, now)}
-                        <span className="mx-1.5 text-terra/35">·</span>
-                        <span className="text-terra/65">{recurringLabel(reminder)}</span>
-                      </p>
-                    </div>
-                    <ActionButtons reminder={reminder} people={people} onEdit={onEdit} onDelete={onDelete} />
-                  </div>
-                </div>
+                  reminder={reminder}
+                  index={index}
+                  isNew={false}
+                  isExiting={exitingIds.has(reminder.id)}
+                  people={people}
+                  onToggle={handleToggle}
+                  onEdit={onEdit}
+                  onDelete={handleDelete}
+                  showToggle={false}
+                />
               ))}
-            </div>
+            </ReminderGroup>
           )}
         </div>
       )}
 
-      {/* ── History ── */}
       {completed.length > 0 && (
-        <div className="animate-fade-up delay-200">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-semibold text-terra/50 uppercase tracking-[0.15em]">
-              History
-            </span>
-            <span className="text-xs text-terra/40 font-light">{completed.length}</span>
-            <div className="flex-1 h-px bg-terra/8" />
+        <div className="pt-10 mt-2">
+          <hr className={SECTION_RULE} />
+          <div className="flex items-center">
+            <p className={`${SECTION_LABEL} flex-1`}>{copy.sectionHistory}</p>
             <button
               onClick={() => setShowCompleted(!showCompleted)}
-              className="text-xs text-terra/30 hover:text-terra/60 transition-colors px-2 py-0.5
-                         rounded-pill hover:bg-blush-pale"
+              className="font-outfit text-body text-ink-faint hover:text-accent transition-colors pr-1"
             >
-              {showCompleted ? 'Hide' : 'Show'}
+              {showCompleted ? copy.hide : copy.show}
             </button>
           </div>
-
           {showCompleted && (
-            <div className="space-y-2">
+            <ReminderGroup>
               {completed.map((reminder) => (
                 <div
                   key={reminder.id}
-                  className="flex items-center gap-3.5 px-6 py-4 rounded-2xl
-                             bg-blush-pale/40 hover:bg-blush-pale/60
-                             transition-colors duration-200 group"
+                  className={`${REMINDER_CARD} items-center py-4
+                    ${exitingIds.has(reminder.id) ? 'animate-slide-out-right' : ''}`}
                 >
                   <button
-                    onClick={() => onToggle(reminder.id)}
-                    className="w-5 h-5 rounded-full bg-terra/20 flex items-center justify-center
-                               flex-shrink-0 hover:bg-terra/30 transition-colors active:scale-90"
-                    aria-label="Restore reminder"
+                    onClick={() => handleToggle(reminder.id)}
+                    className="w-[18px] h-[18px] rounded-full bg-ink-faint/30 flex items-center justify-center flex-shrink-0"
+                    aria-label="Restore"
                   >
-                    <svg className="w-2.5 h-2.5 text-terra/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    <svg className="w-3 h-3 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </button>
                   <div className="flex-1 min-w-0">
-                    <p className="text-terra/40 line-through text-sm font-light truncate">
-                      {reminder.text}
-                    </p>
-                    <p className="text-terra/25 text-xs mt-0.5 font-light">
-                      {reminder.date < now && !reminder.isCompleted ? 'Past' : 'Completed'}
-                    </p>
+                    <p className={`${CARD_TITLE} text-ink-faint line-through font-semibold truncate`}>{reminder.text}</p>
                   </div>
                   <button
-                    onClick={() => onDelete(reminder.id)}
-                    className="text-terra/20 hover:text-red-400 p-1 rounded-lg
-                               opacity-0 group-hover:opacity-100
-                               transition-all duration-150 flex-shrink-0"
-                    title="Delete"
+                    onClick={() => handleDelete(reminder.id)}
+                    className={ACTION_BTN}
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
               ))}
-            </div>
+            </ReminderGroup>
           )}
         </div>
       )}

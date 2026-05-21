@@ -1,12 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import OutlineIcon from '@/components/OutlineIcon'
+import { copy } from '@/lib/copy'
 
 interface ReminderInputProps {
   onSubmit: (text: string) => void
+  placeholder?: string
+  compact?: boolean
+  hero?: boolean
 }
 
-export default function ReminderInput({ onSubmit }: ReminderInputProps) {
+export default function ReminderInput({
+  onSubmit,
+  placeholder = copy.inputPlaceholder,
+  compact = false,
+  hero = false,
+}: ReminderInputProps) {
   const [text, setText] = useState('')
   const [focused, setFocused] = useState(false)
 
@@ -18,16 +28,21 @@ export default function ReminderInput({ onSubmit }: ReminderInputProps) {
     }
   }
 
+  const isHero = hero && !compact
+
   return (
-    <form onSubmit={handleSubmit} className="w-full animate-fade-up delay-200">
+    <form onSubmit={handleSubmit} className="w-full font-outfit">
       <div
         className={`
-          flex items-center gap-3 px-6 sm:px-8 py-4 sm:py-5
-          bg-blush-pale rounded-pill
-          border-2 transition-all duration-300
-          ${focused
-            ? 'border-terra/30 shadow-[0_6px_32px_rgba(212,117,106,0.16)]'
-            : 'border-transparent shadow-[0_2px_16px_rgba(212,117,106,0.06)]'
+          flex items-center bg-surface font-outfit
+          transition-all duration-300 ease-out
+          ${isHero
+            ? `rounded-2xl gap-4 py-5 px-6
+               ${focused ? 'shadow-input bg-surface-soft' : 'shadow-input'}
+               border border-surface-soft/60`
+            : `rounded-card gap-3 overflow-hidden
+               ${focused ? 'shadow-card bg-surface-soft' : ''}
+               ${compact ? 'py-2.5 px-3' : 'py-3.5 px-4'}`
           }
         `}
       >
@@ -37,33 +52,30 @@ export default function ReminderInput({ onSubmit }: ReminderInputProps) {
           onChange={(e) => setText(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Type here: Title — Date/Day — Time"
-          className="flex-1 min-w-0 bg-transparent text-sm sm:text-base text-terra-deep font-light
-                     placeholder:text-terra/60 focus:ring-0 focus:outline-none"
+          placeholder={placeholder}
+          className={`
+            flex-1 min-w-0 bg-transparent text-ink font-outfit text-body font-light
+            placeholder:text-ink-faint placeholder:font-light
+            focus:ring-0 focus:outline-none
+          `}
         />
         <button
           type="submit"
           disabled={!text.trim()}
           aria-label="Add reminder"
           className={`
-            flex-shrink-0 w-9 h-9 rounded-full
-            flex items-center justify-center
-            transition-all duration-300
+            flex-shrink-0 flex items-center justify-center rounded-full font-sans
+            transition-all duration-200 ease-out
+            ${isHero ? 'w-11 h-11' : compact ? 'w-9 h-9' : 'w-10 h-10'}
             ${text.trim()
-              ? 'bg-terra text-white hover:bg-terra-deep active:scale-90 shadow-[0_4px_12px_rgba(212,117,106,0.35)] animate-scale-in'
-              : 'bg-terra/20 text-terra/40 cursor-not-allowed'
+              ? 'text-accent hover:bg-accent hover:text-white'
+              : 'text-ink-faint/50 cursor-not-allowed'
             }
           `}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14m-7-7l7 7-7 7" />
-          </svg>
+          <OutlineIcon name="add" size={isHero ? 'md' : 'sm'} />
         </button>
       </div>
-
-      <p className="mt-3 text-xs sm:text-sm text-terra/65 text-center font-light tracking-widest uppercase">
-        Title &nbsp;·&nbsp; Day / Date &nbsp;·&nbsp; Time
-      </p>
     </form>
   )
 }

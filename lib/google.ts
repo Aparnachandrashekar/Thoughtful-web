@@ -1,191 +1,128 @@
-// Google Identity Services (GIS) for Calendar OAuth token.
-// Firebase Auth is NOT used here — Firestore uses anonymous auth (see app/page.tsx).
+// Google Identity Services (GIS) — incremental authorization.
+// Identity: openid + email + profile (sign-in only).
+// Calendar: https://www.googleapis.com/auth/calendar (explicit user action only).
 
-export const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email'
+import { logGoogleAuthEvent } from '@/lib/googleAuthAnalytics'
 
-// Bump this string whenever the auth method or scopes change — forces re-auth for all users
-const SCOPE_VERSION = 'gis-v3'
+export const IDENTITY_SCOPES = 'openid email profile'
+export const CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar'
+
+/** @deprecated Use IDENTITY_SCOPES / CALENDAR_SCOPES. Kept for tests referencing legacy bundle. */
+export const LEGACY_SCOPES =
+  'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email'
+
+const SCOPE_VERSION = 'gis-v4-incremental'
+const LEGACY_SCOPE_VERSIONS = new Set(['gis-v1', 'gis-v2', 'gis-v3'])
 const SCOPE_VERSION_KEY = 'thoughtful-scope-version'
-
-export let accessToken: string | null = null
-export let userEmail: string | null = null
+const CALENDAR_GRANTED_KEY = 'thoughtful-calendar-granted'
 
 const TOKEN_KEY = 'thoughtful-google-token'
 const TOKEN_EXPIRY_KEY = 'thoughtful-google-token-expiry'
 const USER_EMAIL_KEY = 'thoughtful-google-email'
 const THOUGHTFUL_CALENDAR_KEY = 'thoughtful-gcal-calendar-id'
 
+const SILENT_REFRESH_COOLDOWN_MS = 2 * 60 * 1000
+const SILENT_REFRESH_MIN_INTERVAL_MS = 30 * 1000
+
+export let accessToken: string | null = null
+export let userEmail: string | null = null
 
 let thoughtfulCalendarId: string | null = null
 let gisClientId: string | null = null
+let silentRefreshInProgress: Promise<boolean> | null = null
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let lastSilentRefreshAttempt = 0
+let lastSilentRefreshFailure = 0
+let calendarConnectInProgress = false
 
-// Restore cached token on init. Clears stale tokens if auth method changed.
-export function initGoogleAuth(clientId: string) {
-  if (typeof window === 'undefined') return
-  gisClientId = clientId
+// ─── Migration (preserve existing production sessions) ─────────────────────
 
-  // If auth method changed (e.g. Firebase Auth → GIS), clear old tokens
-  const storedScopeVersion = localStorage.getItem(SCOPE_VERSION_KEY)
-  if (storedScopeVersion !== SCOPE_VERSION) {
+function migrateAuthStorage(): void {
+  const storedVersion = localStorage.getItem(SCOPE_VERSION_KEY)
+  if (storedVersion === SCOPE_VERSION) return
+
+  const hasEmail = !!localStorage.getItem(USER_EMAIL_KEY)
+  const hasToken = !!localStorage.getItem(TOKEN_KEY)
+  const hasExpiry = !!localStorage.getItem(TOKEN_EXPIRY_KEY)
+  const isLegacyVersion =
+    !storedVersion || LEGACY_SCOPE_VERSIONS.has(storedVersion)
+
+  if (hasEmail && hasToken && hasExpiry && isLegacyVersion) {
+    localStorage.setItem(CALENDAR_GRANTED_KEY, 'true')
+    localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+    logGoogleAuthEvent('auth_migration_applied', {
+      from_version: storedVersion || 'unknown',
+      preserved_calendar_token: true,
+    })
+    return
+  }
+
+  if (storedVersion && storedVersion !== SCOPE_VERSION && !hasEmail) {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(TOKEN_EXPIRY_KEY)
     localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
-    localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
-    // Keep USER_EMAIL_KEY so existing reminders/people still load
+    localStorage.removeItem(CALENDAR_GRANTED_KEY)
   }
 
+  if (hasEmail && hasToken && hasExpiry && !localStorage.getItem(CALENDAR_GRANTED_KEY)) {
+    localStorage.setItem(CALENDAR_GRANTED_KEY, 'true')
+  }
+
+  localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+  logGoogleAuthEvent('auth_migration_applied', {
+    from_version: storedVersion || 'none',
+    preserved_calendar_token: !!(hasToken && hasEmail),
+  })
+}
+
+function hasCalendarGrant(): boolean {
+  return localStorage.getItem(CALENDAR_GRANTED_KEY) === 'true'
+}
+
+function markCalendarGranted(): void {
+  localStorage.setItem(CALENDAR_GRANTED_KEY, 'true')
+}
+
+function storeAccessToken(token: string): number {
+  accessToken = token
+  const expiryTime = Date.now() + 55 * 60 * 1000
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+  localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
+  return expiryTime
+}
+
+function restoreTokenFromStorage(): boolean {
   const savedToken = localStorage.getItem(TOKEN_KEY)
   const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+  if (!savedToken || !savedExpiry) return false
+
+  const expiryTime = parseInt(savedExpiry, 10)
+  if (Date.now() >= expiryTime) {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+    accessToken = null
+    return false
+  }
+
+  accessToken = savedToken
   const savedEmail = localStorage.getItem(USER_EMAIL_KEY)
-
-  if (savedToken && savedExpiry && savedEmail) {
-    const expiryTime = parseInt(savedExpiry, 10)
-    if (Date.now() < expiryTime) {
-      accessToken = savedToken
-      userEmail = savedEmail
-      scheduleProactiveRefresh(expiryTime)
-    } else {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(TOKEN_EXPIRY_KEY)
-      accessToken = null
-      userEmail = savedEmail
-    }
-  }
+  if (savedEmail) userEmail = savedEmail
+  if (hasCalendarGrant()) scheduleProactiveRefresh(expiryTime)
+  return true
 }
 
-// Sign in with Google using GIS token client.
-// Opens a Google OAuth popup — no Firebase, no cross-origin iframes.
-export function signIn(callback?: (email: string) => void) {
-  const google = (window as any).google
-  if (!google?.accounts?.oauth2) {
-    console.error('GIS script not loaded yet')
-    return
-  }
-  if (!gisClientId) {
-    console.error('Google client ID not set')
-    return
-  }
+// ─── Identity session ──────────────────────────────────────────────────────
 
-  const tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: gisClientId,
-    scope: SCOPES,
-    callback: async (response: any) => {
-      if (response.error) {
-        console.error('GIS auth error:', response.error)
-        return
-      }
-      if (!response.access_token) return
-
-      accessToken = response.access_token
-      const expiryTime = Date.now() + 55 * 60 * 1000
-      localStorage.setItem(TOKEN_KEY, response.access_token)
-      localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
-      localStorage.setItem(SCOPE_VERSION_KEY, SCOPE_VERSION)
-      scheduleProactiveRefresh(expiryTime)
-
-      // Fetch user email via userinfo API
-      try {
-        const res = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', {
-          headers: { Authorization: `Bearer ${response.access_token}` },
-        })
-        const info = await res.json()
-        if (info.email) {
-          userEmail = info.email
-          localStorage.setItem(USER_EMAIL_KEY, info.email)
-          if (callback) callback(info.email)
-          return
-        }
-      } catch {
-        // fall through to stored-email fallback
-      }
-      // userinfo failed or returned no email — still complete sign-in with stored email
-      const storedEmail = localStorage.getItem(USER_EMAIL_KEY)
-      if (storedEmail) {
-        userEmail = storedEmail
-        if (callback) callback(storedEmail)
-      }
-    },
-  })
-
-  tokenClient.requestAccessToken({ prompt: 'consent' })
-}
-
-// Silently refresh the GIS token using the user's existing Google browser session.
-// Returns a Promise<boolean>: true if a new token was obtained, false otherwise.
-// Uses prompt:'' so Google auto-selects the account without showing UI (if session is valid).
-let silentRefreshInProgress: Promise<boolean> | null = null
-let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
-
-// Schedule a silent token refresh 8 minutes before expiry.
-// Called whenever a new token is stored so we never go stale mid-session.
-function scheduleProactiveRefresh(expiryTime: number) {
-  if (proactiveRefreshTimer) clearTimeout(proactiveRefreshTimer)
-  const msUntilRefresh = expiryTime - Date.now() - 8 * 60 * 1000 // 8 min before expiry
-  if (msUntilRefresh <= 0) return // already close to expiry — let the reactive path handle it
-  proactiveRefreshTimer = setTimeout(() => {
-    trySilentRefresh()
-  }, msUntilRefresh)
-}
-
-export function trySilentRefresh(): Promise<boolean> {
-  if (silentRefreshInProgress) return silentRefreshInProgress
-  if (typeof window === 'undefined') return Promise.resolve(false)
-
-  const google = (window as any).google
-  if (!google?.accounts?.oauth2 || !gisClientId) return Promise.resolve(false)
-
-  const loginHint = userEmail || localStorage.getItem(USER_EMAIL_KEY) || undefined
-
-  silentRefreshInProgress = new Promise<boolean>((resolve) => {
-    // 10s timeout — GIS round-trips to Google's servers, which can take 3–8s on real connections.
-    // 2s was too short and caused almost every silent refresh to time out before Google responded.
-    const timeout = setTimeout(() => resolve(false), 10_000)
-
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: gisClientId,
-      scope: SCOPES,
-      callback: (response: any) => {
-        clearTimeout(timeout)
-        if (response.error || !response.access_token) return resolve(false)
-        accessToken = response.access_token
-        const expiryTime = Date.now() + 55 * 60 * 1000
-        localStorage.setItem(TOKEN_KEY, response.access_token)
-        localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
-        scheduleProactiveRefresh(expiryTime)
-        resolve(true)
-      },
-    })
-    tokenClient.requestAccessToken({ prompt: '', login_hint: loginHint })
-  }).finally(() => {
-    silentRefreshInProgress = null
-  })
-
-  return silentRefreshInProgress
-}
-
-// Clear the Calendar access token — called when a 401/403 is detected so the
-// UI can immediately show the "Reconnect Calendar" button
-export function clearCalendarToken() {
-  accessToken = null
-  thoughtfulCalendarId = null
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(TOKEN_EXPIRY_KEY)
-  localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
-}
-
-export function signOut() {
-  const token = accessToken
-  clearCalendarToken()
-  userEmail = null
-  localStorage.removeItem(USER_EMAIL_KEY)
-  // Revoke the Google OAuth token so the user is fully signed out
-  if (token && (window as any).google?.accounts?.oauth2) {
-    ;(window as any).google.accounts.oauth2.revoke(token, () => {})
-  }
-}
-
-export function isSignedIn(): boolean {
+export function hasIdentitySession(): boolean {
   if (typeof window === 'undefined') return false
+  return !!(userEmail || localStorage.getItem(USER_EMAIL_KEY))
+}
+
+/** Valid non-expired token that was granted for Calendar sync. */
+export function hasCalendarAccess(): boolean {
+  if (typeof window === 'undefined') return false
+  if (!hasCalendarGrant()) return false
 
   const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
   const expiryTime = savedExpiry ? parseInt(savedExpiry, 10) : 0
@@ -196,7 +133,6 @@ export function isSignedIn(): boolean {
   const savedToken = localStorage.getItem(TOKEN_KEY)
   if (savedToken && notExpired) {
     accessToken = savedToken
-    userEmail = localStorage.getItem(USER_EMAIL_KEY)
     return true
   }
 
@@ -207,6 +143,297 @@ export function isSignedIn(): boolean {
   }
 
   return false
+}
+
+/** @deprecated Prefer hasCalendarAccess() — kept for existing call sites. */
+export function isSignedIn(): boolean {
+  return hasCalendarAccess()
+}
+
+export function initGoogleAuth(clientId: string) {
+  if (typeof window === 'undefined') return
+  gisClientId = clientId
+  migrateAuthStorage()
+  restoreTokenFromStorage()
+}
+
+function getLoginHint(): string | undefined {
+  return userEmail || localStorage.getItem(USER_EMAIL_KEY) || undefined
+}
+
+function responseHasCalendarScope(response: { scope?: string }): boolean {
+  const google = (window as typeof window & { google?: typeof google }).google
+  if (google?.accounts?.oauth2?.hasGrantedAllScopes) {
+    return google.accounts.oauth2.hasGrantedAllScopes(
+      response as google.accounts.oauth2.TokenResponse,
+      CALENDAR_SCOPES
+    )
+  }
+  const granted = (response.scope || '').split(/\s+/)
+  return granted.includes(CALENDAR_SCOPES)
+}
+
+type TokenRequestOptions = {
+  scope: string
+  prompt?: string
+  onSuccess: (token: string, response: google.accounts.oauth2.TokenResponse) => void
+  onError?: (reason: string) => void
+}
+
+function requestOAuthToken(options: TokenRequestOptions): void {
+  const google = (window as { google?: { accounts?: { oauth2?: typeof google.accounts.oauth2 } } })
+    .google
+  if (!google?.accounts?.oauth2) {
+    options.onError?.('gis_not_loaded')
+    return
+  }
+  if (!gisClientId) {
+    options.onError?.('missing_client_id')
+    return
+  }
+
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: gisClientId,
+    scope: options.scope,
+    include_granted_scopes: true,
+    callback: (response: google.accounts.oauth2.TokenResponse) => {
+      if (response.error) {
+        options.onError?.(response.error)
+        return
+      }
+      if (!response.access_token) {
+        options.onError?.('no_access_token')
+        return
+      }
+      options.onSuccess(response.access_token, response)
+    },
+    error_callback: (err) => {
+      options.onError?.(err?.type || 'popup_error')
+    },
+  })
+
+  tokenClient.requestAccessToken({
+    prompt: options.prompt,
+    login_hint: getLoginHint(),
+  })
+}
+
+async function fetchIdentityEmail(token: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const info = await res.json()
+    return info.email || null
+  } catch {
+    return null
+  }
+}
+
+// ─── Sign-in (identity only — never requests Calendar) ───────────────────────
+
+export function signIn(callback?: (email: string) => void) {
+  logGoogleAuthEvent('identity_sign_in_started')
+  requestOAuthToken({
+    scope: IDENTITY_SCOPES,
+    prompt: '',
+    onSuccess: async (token) => {
+      storeAccessToken(token)
+      const email =
+        (await fetchIdentityEmail(token)) ||
+        localStorage.getItem(USER_EMAIL_KEY)
+
+      if (!email) {
+        logGoogleAuthEvent('identity_sign_in_failed', { reason: 'no_email' })
+        return
+      }
+
+      userEmail = email
+      localStorage.setItem(USER_EMAIL_KEY, email)
+      logGoogleAuthEvent('identity_sign_in_success')
+      callback?.(email)
+    },
+    onError: (reason) => {
+      logGoogleAuthEvent('identity_sign_in_failed', { reason })
+    },
+  })
+}
+
+// ─── Calendar connect (user-triggered only) ───────────────────────────────────
+
+export function connectCalendar(
+  callback?: (success: boolean) => void
+): void {
+  if (!hasIdentitySession()) {
+    logGoogleAuthEvent('calendar_connect_failed', { reason: 'no_identity_session' })
+    callback?.(false)
+    return
+  }
+  if (calendarConnectInProgress) return
+  calendarConnectInProgress = true
+
+  logGoogleAuthEvent('calendar_connect_started', {
+    previously_granted: hasCalendarGrant(),
+  })
+
+  const tryPrompt = hasCalendarGrant() ? '' : 'consent'
+
+  requestOAuthToken({
+    scope: CALENDAR_SCOPES,
+    prompt: tryPrompt,
+    onSuccess: (token, response) => {
+      calendarConnectInProgress = false
+      if (!responseHasCalendarScope(response)) {
+        logGoogleAuthEvent('calendar_scope_upgrade_failed', {
+          granted_scopes: response.scope || '',
+        })
+        callback?.(false)
+        return
+      }
+      const expiryTime = storeAccessToken(token)
+      markCalendarGranted()
+      scheduleProactiveRefresh(expiryTime)
+      logGoogleAuthEvent('calendar_connect_success', { prompt: tryPrompt || 'silent' })
+      callback?.(true)
+    },
+    onError: (reason) => {
+      calendarConnectInProgress = false
+      logGoogleAuthEvent('calendar_connect_failed', { reason, prompt: tryPrompt || 'silent' })
+      callback?.(false)
+    },
+  })
+}
+
+// ─── Silent refresh (calendar scope only; never on bare startup without grant) ─
+
+function scheduleProactiveRefresh(expiryTime: number) {
+  if (!hasCalendarGrant()) return
+  if (proactiveRefreshTimer) clearTimeout(proactiveRefreshTimer)
+  const msUntilRefresh = expiryTime - Date.now() - 8 * 60 * 1000
+  if (msUntilRefresh <= 0) return
+  proactiveRefreshTimer = setTimeout(() => {
+    trySilentCalendarRefresh()
+  }, msUntilRefresh)
+}
+
+/**
+ * Refresh calendar access token without UI. Only runs when the user previously
+ * granted calendar access. Safe to call from reconnect/visibility handlers.
+ */
+export function trySilentRefresh(): Promise<boolean> {
+  return trySilentCalendarRefresh()
+}
+
+export function trySilentCalendarRefresh(): Promise<boolean> {
+  if (silentRefreshInProgress) return silentRefreshInProgress
+  if (typeof window === 'undefined') return Promise.resolve(false)
+
+  if (!hasIdentitySession() || !hasCalendarGrant()) {
+    return Promise.resolve(false)
+  }
+
+  if (hasCalendarAccess()) return Promise.resolve(true)
+
+  const now = Date.now()
+  if (now - lastSilentRefreshAttempt < SILENT_REFRESH_MIN_INTERVAL_MS) {
+    return Promise.resolve(false)
+  }
+  if (
+    lastSilentRefreshFailure > 0 &&
+    now - lastSilentRefreshFailure < SILENT_REFRESH_COOLDOWN_MS
+  ) {
+    return Promise.resolve(false)
+  }
+
+  lastSilentRefreshAttempt = now
+  logGoogleAuthEvent('calendar_silent_refresh_started')
+
+  const google = (window as { google?: { accounts?: { oauth2?: typeof google.accounts.oauth2 } } })
+    .google
+  if (!google?.accounts?.oauth2 || !gisClientId) {
+    return Promise.resolve(false)
+  }
+
+  silentRefreshInProgress = new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => {
+      lastSilentRefreshFailure = Date.now()
+      logGoogleAuthEvent('calendar_silent_refresh_failed', { reason: 'timeout' })
+      resolve(false)
+    }, 10_000)
+
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: gisClientId!,
+      scope: CALENDAR_SCOPES,
+      include_granted_scopes: true,
+      callback: (response: google.accounts.oauth2.TokenResponse) => {
+        clearTimeout(timeout)
+        if (response.error || !response.access_token) {
+          lastSilentRefreshFailure = Date.now()
+          logGoogleAuthEvent('calendar_silent_refresh_failed', {
+            reason: response.error || 'no_token',
+          })
+          return resolve(false)
+        }
+        if (!responseHasCalendarScope(response)) {
+          lastSilentRefreshFailure = Date.now()
+          logGoogleAuthEvent('calendar_scope_upgrade_failed', {
+            granted_scopes: response.scope || '',
+          })
+          return resolve(false)
+        }
+        const expiryTime = storeAccessToken(response.access_token)
+        markCalendarGranted()
+        scheduleProactiveRefresh(expiryTime)
+        lastSilentRefreshFailure = 0
+        logGoogleAuthEvent('calendar_silent_refresh_success')
+        resolve(true)
+      },
+    })
+    tokenClient.requestAccessToken({ prompt: '', login_hint: getLoginHint() })
+  }).finally(() => {
+    silentRefreshInProgress = null
+  })
+
+  return silentRefreshInProgress
+}
+
+// ─── Session cleanup (no revoke on ordinary sign-out) ────────────────────────
+
+export function clearCalendarToken() {
+  accessToken = null
+  thoughtfulCalendarId = null
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  localStorage.removeItem(THOUGHTFUL_CALENDAR_KEY)
+  if (proactiveRefreshTimer) {
+    clearTimeout(proactiveRefreshTimer)
+    proactiveRefreshTimer = null
+  }
+  logGoogleAuthEvent('calendar_token_cleared')
+}
+
+/** App sign-out: clears local session only. Does not revoke Google grants. */
+export function signOut() {
+  logGoogleAuthEvent('identity_sign_out')
+  clearCalendarToken()
+  userEmail = null
+  localStorage.removeItem(USER_EMAIL_KEY)
+  localStorage.removeItem(CALENDAR_GRANTED_KEY)
+  lastSilentRefreshAttempt = 0
+  lastSilentRefreshFailure = 0
+}
+
+/** Explicit user action to remove app access from Google Account settings flow. */
+export function revokeGoogleAccess(): void {
+  const token = accessToken || localStorage.getItem(TOKEN_KEY)
+  signOut()
+  if (token && (window as { google?: { accounts?: { oauth2?: typeof google.accounts.oauth2 } } }).google?.accounts?.oauth2) {
+    ;(window as { google: { accounts: { oauth2: typeof google.accounts.oauth2 } } }).google.accounts.oauth2.revoke(
+      token,
+      () => logGoogleAuthEvent('google_access_revoked')
+    )
+  }
 }
 
 export function getUserEmail() {
@@ -222,6 +449,8 @@ export function getRemindersKey(): string {
   const email = userEmail || getStoredEmail()
   return email ? `thoughtful-reminders-${email}` : 'thoughtful-reminders'
 }
+
+// ─── Calendar API (requires hasCalendarAccess) ───────────────────────────────
 
 export interface RecurrenceOptions {
   type: 'yearly' | 'monthly' | 'weekly' | 'daily' | null
@@ -266,15 +495,14 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
     const res = await fetch(url, { ...options, signal: controller.signal })
     clearTimeout(timeout)
     return res
-  } catch (e: any) {
+  } catch (e: unknown) {
     clearTimeout(timeout)
-    if (e.name === 'AbortError') throw new Error('Request timed out (10s)')
-    throw new Error(`Network error: ${e.message}`)
+    const err = e as { name?: string; message?: string }
+    if (err.name === 'AbortError') throw new Error('Request timed out (10s)')
+    throw new Error(`Network error: ${err.message || 'unknown'}`)
   }
 }
 
-// Returns the cached Thoughtful calendar ID (memory → localStorage → 'primary' fallback).
-// Used by update/delete/get calls where the calendar was already created.
 function getThoughtfulCalendarId(): string {
   if (thoughtfulCalendarId) return thoughtfulCalendarId
   const stored = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
@@ -285,11 +513,7 @@ function getThoughtfulCalendarId(): string {
   return 'primary'
 }
 
-// Ensures the user has a "Thoughtful" sub-calendar and returns its ID.
-// On first call after sign-in: checks their calendar list, creates if missing, caches the ID.
-// Subsequent calls return the cached ID immediately.
 export async function getOrCreateThoughtfulCalendar(): Promise<string> {
-  // Fast path: already in memory or localStorage
   if (thoughtfulCalendarId) return thoughtfulCalendarId
   const stored = typeof window !== 'undefined' ? localStorage.getItem(THOUGHTFUL_CALENDAR_KEY) : null
   if (stored) {
@@ -297,17 +521,16 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
     return stored
   }
 
-  if (!accessToken) return 'primary'
+  if (!hasCalendarAccess() || !accessToken) return 'primary'
 
   try {
-    // Look for an existing "Thoughtful" calendar in the user's list
     const listRes = await fetchWithTimeout(
       'https://www.googleapis.com/calendar/v3/users/me/calendarList',
       { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } }
     )
     if (listRes.ok) {
       const data = await listRes.json()
-      const existing = (data.items || []).find((c: any) => c.summary === 'Thoughtful')
+      const existing = (data.items || []).find((c: { summary?: string }) => c.summary === 'Thoughtful')
       if (existing?.id) {
         thoughtfulCalendarId = existing.id
         localStorage.setItem(THOUGHTFUL_CALENDAR_KEY, existing.id)
@@ -315,7 +538,6 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
       }
     }
 
-    // Not found — create a new "Thoughtful" calendar for this user
     const createRes = await fetchWithTimeout(
       'https://www.googleapis.com/calendar/v3/calendars',
       {
@@ -339,12 +561,14 @@ export async function getOrCreateThoughtfulCalendar(): Promise<string> {
   return 'primary'
 }
 
-// Detect auth/permission errors from Calendar API responses
 function isAuthError(status: number, message: string): boolean {
-  return status === 401 || status === 403 ||
+  return (
+    status === 401 ||
+    status === 403 ||
     message.toLowerCase().includes('unauthorized') ||
     message.toLowerCase().includes('forbidden') ||
     message.toLowerCase().includes('insufficient')
+  )
 }
 
 export async function createCalendarEvent(event: {
@@ -354,15 +578,22 @@ export async function createCalendarEvent(event: {
   addMeetLink?: boolean
   attendeeEmail?: string
 }) {
-  if (!isSignedIn()) throw new Error('Not signed in')
+  if (!hasCalendarAccess()) throw new Error('Calendar not connected')
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const startDate = new Date(event.date)
   const endDate = new Date(startDate.getTime() + 30 * 60 * 1000)
 
-  const reminders = event.recurrence?.isBirthday || event.recurrence?.isAnniversary
-    ? { useDefault: false, overrides: [{ method: 'popup', minutes: 1440 }, { method: 'popup', minutes: 0 }] }
-    : { useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] }
+  const reminders =
+    event.recurrence?.isBirthday || event.recurrence?.isAnniversary
+      ? {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 1440 },
+            { method: 'popup', minutes: 0 },
+          ],
+        }
+      : { useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] }
 
   const eventBody: Record<string, unknown> = {
     summary: event.title,
@@ -380,8 +611,8 @@ export async function createCalendarEvent(event: {
     eventBody.conferenceData = {
       createRequest: {
         requestId: `meet-${Date.now()}`,
-        conferenceSolutionKey: { type: 'hangoutsMeet' }
-      }
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
     }
   }
 
@@ -404,7 +635,7 @@ export async function createCalendarEvent(event: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    const msg = err.error?.message || `Calendar API error (${res.status})`
+    const msg = (err as { error?: { message?: string } }).error?.message || `Calendar API error (${res.status})`
     if (isAuthError(res.status, msg)) clearCalendarToken()
     throw new Error(msg)
   }
@@ -413,7 +644,7 @@ export async function createCalendarEvent(event: {
 }
 
 export async function updateCalendarEvent(eventId: string, event: { title: string; date: string }) {
-  if (!accessToken) throw new Error('Not signed in')
+  if (!hasCalendarAccess() || !accessToken) throw new Error('Calendar not connected')
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const startDate = new Date(event.date)
@@ -435,7 +666,7 @@ export async function updateCalendarEvent(eventId: string, event: { title: strin
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    const msg = err.error?.message || `Calendar update failed (${res.status})`
+    const msg = (err as { error?: { message?: string } }).error?.message || `Calendar update failed (${res.status})`
     if (isAuthError(res.status, msg)) clearCalendarToken()
     throw new Error(msg)
   }
@@ -443,8 +674,8 @@ export async function updateCalendarEvent(eventId: string, event: { title: strin
   return res.json()
 }
 
-export async function getCalendarEvent(eventId: string): Promise<any> {
-  if (!accessToken) throw new Error('Not signed in')
+export async function getCalendarEvent(eventId: string): Promise<Record<string, unknown>> {
+  if (!hasCalendarAccess() || !accessToken) throw new Error('Calendar not connected')
 
   const calendarId = getThoughtfulCalendarId()
   const res = await fetchWithTimeout(
@@ -454,7 +685,7 @@ export async function getCalendarEvent(eventId: string): Promise<any> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    const msg = err.error?.message || `Calendar get failed (${res.status})`
+    const msg = (err as { error?: { message?: string } }).error?.message || `Calendar get failed (${res.status})`
     if (isAuthError(res.status, msg)) clearCalendarToken()
     throw new Error(msg)
   }
@@ -463,7 +694,7 @@ export async function getCalendarEvent(eventId: string): Promise<any> {
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  if (!accessToken) return
+  if (!hasCalendarAccess() || !accessToken) return
 
   try {
     const calendarId = getThoughtfulCalendarId()
@@ -473,7 +704,7 @@ export async function deleteCalendarEvent(eventId: string) {
     )
     if (!res.ok && res.status !== 404) {
       const err = await res.json().catch(() => ({}))
-      const msg = err.error?.message || ''
+      const msg = (err as { error?: { message?: string } }).error?.message || ''
       if (isAuthError(res.status, msg)) clearCalendarToken()
     }
   } catch {

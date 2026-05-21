@@ -9,7 +9,7 @@ import DatePickerModal from '@/components/DatePickerModal'
 import { Reminder } from '@/components/ReminderList'
 import { Person, CareTemplate, RelationshipType, RELATIONSHIP_LABELS, RELATIONSHIP_EMOJI } from '@/lib/types'
 import { getPersonById, linkReminderToPerson, updatePerson, deletePerson } from '@/lib/people'
-import { getRemindersKey, isSignedIn, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
+import { getRemindersKey, hasCalendarAccess, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, RecurrenceOptions, getStoredEmail } from '@/lib/google'
 import { generateTitle } from '@/lib/ai'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, deletePersonFromFirestore, pullFromFirestore } from '@/lib/db'
 import { parseReminder, RecurrenceInfo } from '@/lib/parser'
@@ -209,7 +209,7 @@ export default function PersonProfilePage() {
       if (userEmail) syncReminderToFirestore(userEmail, newReminder)
       setReminders(prev => [newReminder, ...prev])
 
-      if (isSignedIn()) {
+      if (hasCalendarAccess()) {
         setStatus('Creating calendar event...')
         const result = await createCalendarEvent({
           title: friendlyTitle,
@@ -279,7 +279,7 @@ export default function PersonProfilePage() {
   const handleDeleteReminder = async (id: string) => {
     const reminder = reminders.find(r => r.id === id)
 
-    if (reminder?.calendarEventId && isSignedIn()) {
+    if (reminder?.calendarEventId && hasCalendarAccess()) {
       try {
         setStatus('Removing from calendar...')
         await deleteCalendarEvent(reminder.calendarEventId)
@@ -308,7 +308,7 @@ export default function PersonProfilePage() {
     saveReminders(updatedAll)
     setReminders(prev => prev.map(r => r.id === id ? updated : r))
     if (userEmail) syncReminderToFirestore(userEmail, updated)
-    if (reminder.calendarEventId && isSignedIn()) {
+    if (reminder.calendarEventId && hasCalendarAccess()) {
       try {
         await updateCalendarEvent(reminder.calendarEventId, { title: text, date: date.toISOString() })
         setStatus('Reminder updated')
@@ -367,7 +367,7 @@ export default function PersonProfilePage() {
       if (userEmail) syncReminderToFirestore(userEmail, newReminder)
       setReminders(prev => [newReminder, ...prev])
 
-      if (isSignedIn()) {
+      if (hasCalendarAccess()) {
         const recurrenceOptions: RecurrenceOptions | undefined = data.isRecurring && data.recurrenceType ? {
           type: data.recurrenceType as 'weekly' | 'monthly' | 'yearly',
           isBirthday: false,

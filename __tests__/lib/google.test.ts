@@ -1,6 +1,16 @@
-import { initGoogleAuth, isSignedIn, getRemindersKey, getStoredEmail, clearCalendarToken, signOut } from '@/lib/google'
+import {
+  initGoogleAuth,
+  isSignedIn,
+  hasCalendarAccess,
+  hasIdentitySession,
+  getRemindersKey,
+  getStoredEmail,
+  clearCalendarToken,
+  signOut,
+  IDENTITY_SCOPES,
+  CALENDAR_SCOPES,
+} from '@/lib/google'
 
-// Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {}
   return {
@@ -15,23 +25,43 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 
 beforeEach(() => {
   localStorageMock.clear()
-  // Reset module-level userEmail state (signOut is safe without google API in jsdom)
   signOut()
 })
 
-describe('isSignedIn', () => {
+describe('scope constants', () => {
+  it('uses OpenID identity scopes only for sign-in', () => {
+    expect(IDENTITY_SCOPES).toBe('openid email profile')
+    expect(IDENTITY_SCOPES).not.toContain('calendar')
+  })
+
+  it('uses calendar scope for incremental API access', () => {
+    expect(CALENDAR_SCOPES).toBe('https://www.googleapis.com/auth/calendar')
+  })
+})
+
+describe('hasCalendarAccess / isSignedIn', () => {
   it('returns false when no token stored', () => {
-    // Fresh state — no token
+    expect(hasCalendarAccess()).toBe(false)
     expect(isSignedIn()).toBe(false)
   })
 
-  it('returns true when valid token and expiry exist in localStorage', () => {
+  it('returns false when token exists but calendar not granted', () => {
     const futureExpiry = (Date.now() + 60 * 60 * 1000).toString()
     localStorageMock.setItem('thoughtful-google-token', 'fake-token-123')
     localStorageMock.setItem('thoughtful-google-token-expiry', futureExpiry)
     localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
+    expect(hasCalendarAccess()).toBe(false)
+  })
 
-    expect(isSignedIn()).toBe(true)
+  it('returns true when valid token and calendar granted flag set', () => {
+    const futureExpiry = (Date.now() + 60 * 60 * 1000).toString()
+    localStorageMock.setItem('thoughtful-google-token', 'fake-token-123')
+    localStorageMock.setItem('thoughtful-google-token-expiry', futureExpiry)
+    localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
+    localStorageMock.setItem('thoughtful-calendar-granted', 'true')
+    localStorageMock.setItem('thoughtful-scope-version', 'gis-v4-incremental')
+
+    expect(hasCalendarAccess()).toBe(true)
   })
 
   it('returns false when token is expired', () => {
@@ -39,8 +69,20 @@ describe('isSignedIn', () => {
     localStorageMock.setItem('thoughtful-google-token', 'old-token')
     localStorageMock.setItem('thoughtful-google-token-expiry', pastExpiry)
     localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
+    localStorageMock.setItem('thoughtful-calendar-granted', 'true')
 
-    expect(isSignedIn()).toBe(false)
+    expect(hasCalendarAccess()).toBe(false)
+  })
+})
+
+describe('hasIdentitySession', () => {
+  it('returns false without stored email', () => {
+    expect(hasIdentitySession()).toBe(false)
+  })
+
+  it('returns true with stored email', () => {
+    localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
+    expect(hasIdentitySession()).toBe(true)
   })
 })
 
@@ -57,52 +99,52 @@ describe('getStoredEmail', () => {
 
 describe('getRemindersKey', () => {
   it('returns generic key when not signed in', () => {
-    // Ensure no email is in localStorage for this test
     localStorageMock.removeItem('thoughtful-google-email')
-    const key = getRemindersKey()
-    expect(key).toBe('thoughtful-reminders')
+    expect(getRemindersKey()).toBe('thoughtful-reminders')
   })
 
   it('returns email-specific key when email stored', () => {
     localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
-    const key = getRemindersKey()
-    expect(key).toBe('thoughtful-reminders-user@example.com')
+    expect(getRemindersKey()).toBe('thoughtful-reminders-user@example.com')
   })
 })
 
-describe('initGoogleAuth', () => {
-  it('clears tokens when scope version is stale', () => {
+describe('initGoogleAuth migration', () => {
+  it('preserves legacy tokens when migrating from gis-v3 with email', () => {
     localStorageMock.setItem('thoughtful-google-token', 'old-token')
-    localStorageMock.setItem('thoughtful-google-token-expiry', '999999')
-    localStorageMock.setItem('thoughtful-scope-version', 'old-version')
-
-    initGoogleAuth('client-id-123')
-
-    // Tokens should be cleared because scope version changed
-    expect(localStorageMock.getItem('thoughtful-google-token')).toBeNull()
-    expect(localStorageMock.getItem('thoughtful-google-token-expiry')).toBeNull()
-  })
-
-  it('preserves email when clearing stale tokens', () => {
+    localStorageMock.setItem('thoughtful-google-token-expiry', (Date.now() + 3600000).toString())
     localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
-    localStorageMock.setItem('thoughtful-scope-version', 'old-version')
+    localStorageMock.setItem('thoughtful-scope-version', 'gis-v3')
 
     initGoogleAuth('client-id-123')
 
-    // Email should be preserved
-    expect(localStorageMock.getItem('thoughtful-google-email')).toBe('user@example.com')
+    expect(localStorageMock.getItem('thoughtful-google-token')).toBe('old-token')
+    expect(localStorageMock.getItem('thoughtful-calendar-granted')).toBe('true')
+    expect(localStorageMock.getItem('thoughtful-scope-version')).toBe('gis-v4-incremental')
+    expect(hasCalendarAccess()).toBe(true)
   })
 
-  it('restores valid token from localStorage', () => {
+  it('clears orphan tokens when migrating without email', () => {
+    localStorageMock.setItem('thoughtful-google-token', 'orphan-token')
+    localStorageMock.setItem('thoughtful-google-token-expiry', '999999')
+    localStorageMock.setItem('thoughtful-scope-version', 'gis-v2')
+
+    initGoogleAuth('client-id-123')
+
+    expect(localStorageMock.getItem('thoughtful-google-token')).toBeNull()
+  })
+
+  it('restores valid token from localStorage after migration', () => {
     const futureExpiry = (Date.now() + 60 * 60 * 1000).toString()
     localStorageMock.setItem('thoughtful-google-token', 'valid-token')
     localStorageMock.setItem('thoughtful-google-token-expiry', futureExpiry)
     localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
-    localStorageMock.setItem('thoughtful-scope-version', 'gis-v1')
+    localStorageMock.setItem('thoughtful-calendar-granted', 'true')
+    localStorageMock.setItem('thoughtful-scope-version', 'gis-v4-incremental')
 
     initGoogleAuth('client-id-123')
 
-    expect(isSignedIn()).toBe(true)
+    expect(hasCalendarAccess()).toBe(true)
   })
 })
 
@@ -124,5 +166,19 @@ describe('clearCalendarToken', () => {
     clearCalendarToken()
 
     expect(localStorageMock.getItem('thoughtful-google-email')).toBe('user@example.com')
+  })
+})
+
+describe('signOut', () => {
+  it('clears email and calendar grant without requiring revoke API', () => {
+    localStorageMock.setItem('thoughtful-google-email', 'user@example.com')
+    localStorageMock.setItem('thoughtful-google-token', 'some-token')
+    localStorageMock.setItem('thoughtful-calendar-granted', 'true')
+
+    signOut()
+
+    expect(localStorageMock.getItem('thoughtful-google-email')).toBeNull()
+    expect(localStorageMock.getItem('thoughtful-google-token')).toBeNull()
+    expect(localStorageMock.getItem('thoughtful-calendar-granted')).toBeNull()
   })
 })

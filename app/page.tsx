@@ -1168,7 +1168,7 @@ export default function Home() {
               <p className="font-outfit text-[18px] sm:text-[20px] italic text-ink-muted font-light mt-5 sm:mt-6 text-center leading-snug px-1">
                 {copy.tagline}
               </p>
-              <p className="font-outfit text-[14px] sm:text-[15px] text-ink-muted font-light mt-3 mb-4 text-center leading-relaxed max-w-md mx-auto px-2">
+              <p className="font-outfit text-[13px] sm:text-[14px] italic text-[#9CA3AF] font-light mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
                 {copy.description}
               </p>
               <div className="w-full min-h-[2.75rem] flex items-center justify-center mb-1 px-1">

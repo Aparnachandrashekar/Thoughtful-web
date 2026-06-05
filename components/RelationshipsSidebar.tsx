@@ -68,7 +68,7 @@ export default function RelationshipsSidebar({
               {copy.profilesEmpty}
             </p>
           ) : (
-            <ul className="space-y-12">
+            <ul className="space-y-5">
               {people.map((person) => {
                 const isSelected = pathname === `/person/${person.id}`
                 return (
@@ -76,7 +76,7 @@ export default function RelationshipsSidebar({
                     <button
                       onClick={() => handlePersonClick(person.id)}
                       className={`
-                        w-full flex flex-col items-start text-left py-3 min-h-[44px]
+                        w-full flex flex-col items-start text-left py-1 min-h-[44px]
                         transition-opacity duration-150
                         ${isSelected ? 'opacity-100' : 'opacity-85 hover:opacity-100'}
                       `}
@@ -89,7 +89,7 @@ export default function RelationshipsSidebar({
                           {person.name}
                         </ThoughtfulTitle>
                       </span>
-                      <p className="text-sm text-ink-muted mt-3 font-light tracking-wide">
+                      <p className="text-sm text-ink-muted mt-1.5 font-light tracking-wide">
                         {RELATIONSHIP_LABELS[person.relationshipType]}
                       </p>
                     </button>

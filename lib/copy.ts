@@ -3,6 +3,8 @@
 export const copy = {
   appName: 'Thoughtful',
   tagline: 'An easy way to remember things that matter',
+  description:
+    'Type a reminder in plain English and Thoughtful automatically creates a Google Calendar event. Stay close to the people you love, without the friction.',
   metaDescription: 'Your guide to building beautiful relationships by being thoughtful',
 
   inputPlaceholder: 'Title - Day or Date - Time',

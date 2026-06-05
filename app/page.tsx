@@ -1178,8 +1178,8 @@ export default function Home() {
           )}
 
           {/* sm+: one column sized to the title; mobile: full-width cards below hero */}
-          <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6 max-sm:overflow-x-hidden">
-            <div className="w-full sm:w-fit max-sm:max-w-full sm:max-w-none flex flex-col items-stretch">
+          <div className="w-full mx-auto flex flex-col items-center px-5 sm:px-6 max-sm:overflow-x-hidden">
+            <div className="w-full sm:w-fit max-sm:max-w-[21.5rem] max-sm:mx-auto sm:max-w-none flex flex-col items-stretch">
             <section
               className={
                 signedIn
@@ -1190,10 +1190,10 @@ export default function Home() {
               <h1 className="leading-none text-center w-full mt-4 sm:mt-6">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
-              <p className="font-outfit text-[16px] sm:text-[20px] italic text-ink-muted font-light mt-4 sm:mt-6 text-center leading-snug px-1">
+              <p className="font-outfit text-[13px] sm:text-[20px] italic text-ink-muted font-light mt-3 sm:mt-6 text-center leading-snug px-1">
                 {copy.tagline}
               </p>
-              <p className="font-outfit text-[12px] sm:text-[14px] italic text-[#9CA3AF] font-light mt-2 sm:mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
+              <p className="font-outfit text-[11px] sm:text-[14px] italic text-[#9CA3AF] font-light mt-1.5 sm:mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
                 {copy.description}
               </p>
               <div className="w-full min-h-[2.75rem] flex items-center justify-center mb-1 px-1">
@@ -1212,7 +1212,7 @@ export default function Home() {
                 </p>
               )}
               {signedIn && (
-                <p className="mt-5 font-outfit text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
+                <p className="mt-4 sm:mt-5 font-outfit text-[11px] sm:text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
                   {copy.helpText}
                 </p>
               )}

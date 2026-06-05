@@ -37,18 +37,19 @@ interface ReminderListProps {
   newReminderId?: string | null
 }
 
-const ICON_CLASS = 'w-4 h-4 sm:w-5 sm:h-5'
+const ICON_CLASS = 'w-5 h-5 sm:w-5 sm:h-5'
 const ACTION_BTN =
-  'flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
+  'flex items-center justify-center min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] p-1.5 sm:p-2 ' +
+  'text-accent hover:text-accent-hover hover:bg-accent-soft rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
 const SECTION_LABEL =
-  'font-outfit text-sm sm:text-[15px] font-semibold text-ink-muted tracking-wide py-2 sm:py-3'
+  'font-outfit text-xs sm:text-[15px] font-semibold text-ink-muted tracking-wide py-1.5 sm:py-3'
 const CARD_TITLE =
-  'font-sans text-[15px] sm:text-[17px] font-bold text-ink leading-snug tracking-tight break-words'
-const CARD_META = 'font-outfit text-[13px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
+  'font-sans text-[13px] sm:text-[17px] font-semibold text-ink leading-snug tracking-tight break-words'
+const CARD_META = 'font-outfit text-[11px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
 const REMINDER_CARD =
   'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
-  'flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 px-4 py-4 sm:px-5 sm:py-4 w-full min-w-0'
+  'grid grid-cols-[1fr_auto] items-start gap-x-2 gap-y-0 px-3 py-3 sm:px-5 sm:py-4 w-full min-w-0'
 
 function recurringLabel(reminder: Reminder): string {
   if (reminder.isBirthday) return 'Birthday · yearly'
@@ -78,7 +79,7 @@ function ActionButtons({
     : null
 
   return (
-    <div className={`flex items-center gap-0 flex-shrink-0 mt-0.5 ${className}`}>
+    <div className={`flex items-center gap-0 flex-shrink-0 ${className}`}>
       {calendarDayUrl && (
         <a
           href={calendarDayUrl}
@@ -87,7 +88,7 @@ function ActionButtons({
           className={ACTION_BTN}
           title="View in Google Calendar"
         >
-          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -95,7 +96,7 @@ function ActionButtons({
       )}
       {onEdit && (
         <button onClick={() => onEdit(reminder.id)} className={ACTION_BTN} title="Edit">
-          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+          <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
@@ -103,7 +104,7 @@ function ActionButtons({
       )}
       <WhatsAppButton phone={phone} className={ACTION_BTN} />
       <button onClick={() => onDelete(reminder.id)} className={ACTION_BTN} title="Delete">
-        <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
+        <svg className={ICON_CLASS} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
@@ -143,11 +144,11 @@ function ReminderCard({
       className={`${REMINDER_CARD} ${animClass}`}
       style={!isExiting && !isNew ? { animationFillMode: 'both' } : undefined}
     >
-      <div className="flex items-start gap-2.5 flex-1 min-w-0 w-full">
+      <div className="flex items-start gap-2 min-w-0">
         {showToggle && (
           <button
             onClick={() => onToggle(reminder.id)}
-            className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-faint
+            className="mt-0.5 w-4 h-4 rounded-full border-[1.5px] border-ink-faint
                        hover:border-accent flex-shrink-0 transition-colors duration-150"
             aria-label="Mark complete"
           />
@@ -167,7 +168,6 @@ function ReminderCard({
         people={people}
         onEdit={onEdit}
         onDelete={onDelete}
-        className="self-end sm:self-start"
       />
     </div>
   )
@@ -310,20 +310,22 @@ export default function ReminderList({
               {completed.map((reminder) => (
                 <div
                   key={reminder.id}
-                  className={`${REMINDER_CARD} items-center py-4
+                  className={`${REMINDER_CARD}
                     ${exitingIds.has(reminder.id) ? 'animate-fade-out pointer-events-none' : ''}`}
                 >
-                  <button
-                    onClick={() => handleToggle(reminder.id)}
-                    className="w-[18px] h-[18px] rounded-full bg-ink-faint/30 flex items-center justify-center flex-shrink-0"
-                    aria-label="Restore"
-                  >
-                    <svg className="w-3 h-3 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <p className={`${CARD_TITLE} text-ink-faint line-through font-semibold truncate`}>{reminder.text}</p>
+                  <div className="flex items-start gap-2 min-w-0">
+                    <button
+                      onClick={() => handleToggle(reminder.id)}
+                      className="mt-0.5 w-4 h-4 rounded-full bg-ink-faint/30 flex items-center justify-center flex-shrink-0"
+                      aria-label="Restore"
+                    >
+                      <svg className="w-2.5 h-2.5 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className={`${CARD_TITLE} text-ink-faint line-through break-words`}>{reminder.text}</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleDelete(reminder.id)}

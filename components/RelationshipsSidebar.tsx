@@ -82,15 +82,15 @@ export default function RelationshipsSidebar({
                         ${isSelected ? 'opacity-100' : 'opacity-85 hover:opacity-100'}
                       `}
                     >
-                      <div style={{ fontSize: 'clamp(28px, 7vw, 44px)' }}>
+                      <div style={{ fontSize: 'clamp(26px, 6.5vw, 44px)' }}>
                         <div className="flex items-center gap-[0.4em] w-full min-w-0">
                           <ProfileShapeIcon index={index} />
-                          <span className="font-sans font-bold text-ink tracking-tight leading-[1.15] truncate">
+                          <span className="font-sans font-bold text-ink tracking-tight leading-[1.15] break-words">
                             {person.name}
                           </span>
                         </div>
                         <div className="mt-1.5 pl-[calc(0.78em+0.4em)]">
-                          <p className="text-sm text-ink-muted font-light tracking-wide">
+                          <p className="text-xs text-ink-muted font-light tracking-wide">
                             {RELATIONSHIP_LABELS[person.relationshipType]}
                           </p>
                         </div>

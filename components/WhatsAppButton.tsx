@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 /** Recognizable WhatsApp-style outline icon */
 const Icon = () => (
-  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
     <path
       strokeLinecap="round"
       strokeLinejoin="round"

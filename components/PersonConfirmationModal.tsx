@@ -16,20 +16,17 @@ export default function PersonConfirmationModal({
   isLoading = false
 }: PersonConfirmationModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onDeny}
       />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4 animate-fade-in">
+      <div className="relative bg-page rounded-card shadow-card p-6 max-w-sm w-full max-h-[86vh] overflow-y-auto animate-fade-in font-outfit">
         <div className="text-center space-y-4">
-          {/* Icon */}
-          <div className="mx-auto w-12 h-12 bg-lavender/30 rounded-full flex items-center justify-center">
+          <div className="mx-auto w-12 h-12 bg-surface rounded-full flex items-center justify-center">
             <svg
-              className="w-6 h-6 text-purple-600"
+              className="w-6 h-6 text-accent"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -43,30 +40,28 @@ export default function PersonConfirmationModal({
             </svg>
           </div>
 
-          {/* Question */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">
+            <h3 className="text-lg font-semibold text-ink">
               Is this about {detectedName.name}?
             </h3>
-            <p className="mt-2 text-sm text-gray-500">
-              We'll create a profile for {detectedName.name} so you can track all your
+            <p className="mt-2 text-sm text-ink-muted">
+              We&apos;ll create a profile for {detectedName.name} so you can track all your
               reminders about them in one place.
             </p>
           </div>
 
-          {/* Actions */}
           <div className="flex space-x-3 pt-2">
             <button
               onClick={onDeny}
               disabled={isLoading}
-              className="flex-1 py-2.5 px-4 border-2 border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 font-medium text-sm transition-all disabled:opacity-50"
+              className="flex-1 py-2.5 px-4 border border-accent/20 rounded-card text-ink-muted hover:bg-surface font-medium text-sm transition-all disabled:opacity-50"
             >
               No
             </button>
             <button
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex-1 py-2.5 px-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-md disabled:opacity-50"
+              className="flex-1 py-2.5 px-4 bg-accent text-white rounded-card hover:bg-accent-hover font-medium text-sm transition-all disabled:opacity-50"
             >
               {isLoading ? 'Creating...' : 'Yes, create profile'}
             </button>

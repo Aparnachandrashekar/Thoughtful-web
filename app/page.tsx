@@ -7,6 +7,7 @@ import { auth } from '@/lib/firebase'
 import ReminderInput from '@/components/ReminderInput'
 import OutlineIcon from '@/components/OutlineIcon'
 import GoogleSignInButton from '@/components/GoogleSignInButton'
+import StatusBanner from '@/components/StatusBanner'
 import ThoughtfulTitle from '@/components/ThoughtfulTitle'
 import { copy } from '@/lib/copy'
 import ReminderList, { Reminder } from '@/components/ReminderList'
@@ -39,6 +40,7 @@ import { Person, DetectedName } from '@/lib/types'
 import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from '@/lib/people'
 import { getPrimaryDetectedName } from '@/lib/personDetection'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore, pullFromFirestore } from '@/lib/db'
+import { getPhoneForReminder, whatsappLinkForPhone } from '@/lib/reminderPhone'
 import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
 
 function oauthErrorMessage(reason: string): string {
@@ -160,19 +162,86 @@ export default function Home() {
     localStorage.setItem(key, JSON.stringify(newReminders))
   }, [])
 
-  const attemptSilentCalendarRefresh = useCallback(() => {
+  const lastVisibilityRefresh = useRef(0)
+
+  const attemptSilentCalendarRefresh = useCallback((options?: { onSuccess?: () => void }) => {
     if (silentRefreshInFlight.current || !getStoredEmail()) return
     silentRefreshInFlight.current = true
-    setRefreshingCalendar(true)
     trySilentCalendarRefresh()
       .then(ok => {
-        if (ok) setCalendarConnected(true)
+        if (ok) {
+          setCalendarConnected(true)
+          options?.onSuccess?.()
+        }
       })
       .finally(() => {
         silentRefreshInFlight.current = false
-        setRefreshingCalendar(false)
       })
   }, [])
+
+  const syncUnsyncedRemindersToCalendar = useCallback(async () => {
+    if (!hasCalendarAccess() || !userEmail) return
+
+    const key = getRemindersKey()
+    const saved = localStorage.getItem(key)
+    if (!saved) return
+
+    let parsed: Reminder[]
+    try {
+      parsed = JSON.parse(saved).map((r: Reminder) => ({
+        ...r,
+        date: new Date(r.date),
+      }))
+    } catch {
+      return
+    }
+
+    const peopleList = loadPeople(userEmail)
+    const now = new Date()
+    const unsynced = parsed.filter(
+      r => !r.calendarEventId && !r.isCompleted && r.date >= now
+    )
+    if (unsynced.length === 0) return
+
+    setStatus(`Syncing ${unsynced.length} reminder${unsynced.length > 1 ? 's' : ''} to calendar…`)
+
+    let updated = [...parsed]
+    for (const reminder of unsynced) {
+      try {
+        const result = await createCalendarEvent({
+          title: reminder.text,
+          date: reminder.date.toISOString(),
+        })
+        if (!result?.id) continue
+
+        const phone = getPhoneForReminder(reminder, peopleList)
+        const calFields = {
+          calendarEventId: result.id,
+          calendarHtmlLink: result.htmlLink || undefined,
+          lastSyncedAt: Date.now(),
+          originalStartTime: result.start?.dateTime || undefined,
+          ...(phone
+            ? { phoneNumber: phone, whatsappLink: whatsappLinkForPhone(phone) }
+            : {}),
+        }
+
+        updated = updated.map(r => (r.id === reminder.id ? { ...r, ...calFields } : r))
+        const enriched = updated.find(r => r.id === reminder.id)
+        if (enriched) syncReminderToFirestore(userEmail, enriched)
+      } catch (e) {
+        console.error('Backfill calendar sync failed for', reminder.id, e)
+      }
+    }
+
+    localStorage.setItem(key, JSON.stringify(updated))
+    setReminders(updated)
+    setStatus(
+      unsynced.length === 1
+        ? 'Reminder synced to calendar'
+        : `${unsynced.length} reminders synced to calendar`
+    )
+    setTimeout(() => setStatus(null), 3000)
+  }, [userEmail])
 
   useEffect(() => {
     setMounted(true)
@@ -205,7 +274,11 @@ export default function Home() {
     if ((window as any).google?.accounts?.oauth2) {
       setGoogleReady(true)
       if (!tokenValid && storedEmail) {
-        attemptSilentCalendarRefresh()
+        attemptSilentCalendarRefresh({
+          onSuccess: () => syncUnsyncedRemindersToCalendar(),
+        })
+      } else if (tokenValid && storedEmail) {
+        syncUnsyncedRemindersToCalendar()
       }
     }
 
@@ -218,7 +291,7 @@ export default function Home() {
         setFirebaseReady(true) // Still unblock sync — Firestore calls will fail gracefully
       })
 
-  }, [attemptSilentCalendarRefresh])
+  }, [attemptSilentCalendarRefresh, syncUnsyncedRemindersToCalendar])
 
   // Load reminders when user changes or on mount
   useEffect(() => {
@@ -353,14 +426,14 @@ export default function Home() {
     }
   }, [userEmail])
 
-  // Periodically check token validity; silently refresh before showing Reconnect button
+  // Periodically check token validity; silently refresh only when expired
   useEffect(() => {
     if (!signedIn) return
     const interval = setInterval(() => {
       const valid = hasCalendarAccess()
       if (valid) {
         setCalendarConnected(true)
-      } else if (googleReady) {
+      } else if (googleReady && getStoredEmail()) {
         attemptSilentCalendarRefresh()
       } else {
         setCalendarConnected(false)
@@ -376,27 +449,26 @@ export default function Home() {
     return () => window.removeEventListener('thoughtful:notifications-blocked', handler)
   }, [])
 
-  // Listen for window focus and tab visibility to check for Google Calendar changes
+  // On tab visible: debounced Firestore pull + gcal check; silent refresh only if token expired
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        lastGcalCheck.current = 0  // reset so returning always triggers a fresh check
-      } else if (document.visibilityState === 'visible') {
-        // Proactively refresh expired token when user returns to the tab
-        if (!hasCalendarAccess() && getStoredEmail() && (window as any).google?.accounts?.oauth2) {
-          attemptSilentCalendarRefresh()
-        }
+        lastGcalCheck.current = 0
+        return
+      }
+      const now = Date.now()
+      if (now - lastVisibilityRefresh.current < 30_000) return
+      lastVisibilityRefresh.current = now
+
+      syncFromFirestore(false)
+      if (hasCalendarAccess()) {
         checkForCalendarChanges()
-        // Bidirectional sync so data created on another device/browser shows up
-        syncFromFirestore(false)
+      } else if (getStoredEmail() && (window as any).google?.accounts?.oauth2) {
+        attemptSilentCalendarRefresh()
       }
     }
-    window.addEventListener('focus', checkForCalendarChanges)
     document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('focus', checkForCalendarChanges)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
+    return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [checkForCalendarChanges, syncFromFirestore, attemptSilentCalendarRefresh])
 
   // Handle person confirmation - create profile with default 'close_friend' type
@@ -414,7 +486,12 @@ export default function Home() {
       if (userEmail) syncPersonToFirestore(userEmail, newPerson)
       if (pendingNameConfirmation.reminderId) {
         linkReminderToPerson(newPerson.id, pendingNameConfirmation.reminderId, userEmail || undefined)
-        console.log('Linked reminder to person')
+        const rid = pendingNameConfirmation.reminderId
+        setReminders(prev => prev.map(r =>
+          r.id === rid
+            ? { ...r, personName: newPerson.name }
+            : r
+        ))
       }
       refreshPeople()
       setPendingNameConfirmation(null)
@@ -471,9 +548,12 @@ export default function Home() {
         setStatus(`Signed in as ${email}`)
         setTimeout(() => setStatus(null), 2000)
         if (hasCalendarAccess()) {
-          getOrCreateThoughtfulCalendar().catch((err) => {
-            console.error('Failed to create Thoughtful calendar:', err)
-          })
+          getOrCreateThoughtfulCalendar()
+            .then(() => syncUnsyncedRemindersToCalendar())
+            .catch((err) => {
+              console.error('Failed to create Thoughtful calendar:', err)
+              syncUnsyncedRemindersToCalendar()
+            })
         }
         const pending = sessionStorage.getItem('thoughtful-pending-input')
         if (pending) {
@@ -498,10 +578,12 @@ export default function Home() {
       if (success) {
         setCalendarConnected(true)
         setStatus('Google Calendar connected')
-        setTimeout(() => setStatus(null), 2000)
-        getOrCreateThoughtfulCalendar().catch((err) => {
-          console.error('Failed to create Thoughtful calendar:', err)
-        })
+        getOrCreateThoughtfulCalendar()
+          .then(() => syncUnsyncedRemindersToCalendar())
+          .catch((err) => {
+            console.error('Failed to create Thoughtful calendar:', err)
+            syncUnsyncedRemindersToCalendar()
+          })
       } else {
         logGoogleAuthEvent('calendar_reconnect_prompt_shown')
         setStatus(
@@ -911,19 +993,19 @@ export default function Home() {
     if (r) setEditingReminder(r)
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     const reminder = reminders.find(r => r.id === id)
-    if (reminder?.calendarEventId && hasCalendarAccess()) {
-      try {
-        await deleteCalendarEvent(reminder.calendarEventId)
-        setStatus('Removed from calendar')
-        setTimeout(() => setStatus(null), 2000)
-      } catch {
-        // Still delete locally even if calendar delete fails
-      }
-    }
     setReminders(prev => prev.filter(r => r.id !== id))
     if (userEmail) deleteReminderFromFirestore(userEmail, id)
+
+    if (reminder?.calendarEventId && hasCalendarAccess()) {
+      deleteCalendarEvent(reminder.calendarEventId)
+        .then(() => {
+          setStatus('Removed from calendar')
+          setTimeout(() => setStatus(null), 2000)
+        })
+        .catch(() => {})
+    }
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -1042,7 +1124,7 @@ export default function Home() {
 
           {/* Notifications blocked banner */}
           {notificationsBlocked && (
-            <div className="relative z-20 px-5 sm:px-8 max-w-3xl mx-auto pt-4 mb-4 animate-fade-in">
+            <div className="relative z-20 flex justify-center px-5 sm:px-8 pt-4 mb-4 animate-fade-in">
               <span className="inline-flex items-center gap-2 text-xs text-ink-muted
                                bg-surface px-4 py-2.5 rounded-card">
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1070,26 +1152,26 @@ export default function Home() {
             </div>
           )}
 
-          {/* Status toast */}
-          {status && (
-            <div className="relative z-20 px-5 sm:px-8 max-w-3xl mx-auto pt-2 mb-2 animate-fade-in">
-              <span className="inline-block font-outfit text-body text-ink-muted font-light bg-surface px-4 py-2 rounded-card">
-                {status}
-              </span>
-            </div>
-          )}
-
           {/* sm+: one column sized to the title; mobile: full-width cards below hero */}
           <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6">
             <div className="w-full sm:w-fit max-w-[calc(100vw-2rem)] sm:max-w-none flex flex-col items-stretch">
-            <section className="min-h-screen flex flex-col items-center justify-center w-full">
+            <section
+              className={
+                signedIn
+                  ? 'w-full pt-20 pb-5 sm:pt-24 sm:pb-6 flex flex-col items-center'
+                  : 'min-h-screen flex flex-col items-center justify-center w-full'
+              }
+            >
               <h1 className="leading-none text-center w-full">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
               <p className="font-outfit text-[18px] sm:text-[20px] italic text-ink-muted font-light mt-5 sm:mt-6 text-center leading-snug px-1">
                 {copy.tagline}
               </p>
-              <div className="w-full mt-8">
+              <div className="w-full min-h-[2.75rem] flex items-center justify-center mt-4 mb-1 px-1">
+                <StatusBanner message={status} />
+              </div>
+              <div className="w-full mt-4">
                 <ReminderInput hero onSubmit={handleAddReminder} />
               </div>
               {signedIn && googleReady && !calendarConnected && !refreshingCalendar && (
@@ -1140,7 +1222,7 @@ export default function Home() {
             </section>
 
             {signedIn && (
-              <section className="w-full pb-24 pt-4">
+              <section className="w-full pb-24 pt-3">
                 {/* Mobile: full column width; desktop: same width as title column */}
                 <div className="w-full sm:max-w-none">
                 {gcalUpdates.length > 0 && (

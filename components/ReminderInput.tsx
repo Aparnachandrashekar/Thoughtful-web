@@ -62,7 +62,7 @@ export default function ReminderInput({
         <button
           type="submit"
           disabled={!text.trim()}
-          aria-label="Add reminder"
+          aria-label={isHero ? 'Create reminder' : 'Add reminder'}
           className={`
             flex-shrink-0 flex items-center justify-center rounded-full font-sans
             transition-all duration-200 ease-out
@@ -73,7 +73,7 @@ export default function ReminderInput({
             }
           `}
         >
-          <OutlineIcon name="add" size={isHero ? 'md' : 'sm'} />
+          <OutlineIcon name={isHero ? 'arrow' : 'add'} size={isHero ? 'md' : 'sm'} />
         </button>
       </div>
     </form>

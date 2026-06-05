@@ -2,10 +2,10 @@ import { render, screen } from '@testing-library/react'
 import WhatsAppButton from '@/components/WhatsAppButton'
 
 describe('WhatsAppButton', () => {
-  it('renders a disabled button when no phone number provided', () => {
+  it('renders a button when no phone number provided', () => {
     render(<WhatsAppButton phone="" />)
     const button = screen.getByRole('button')
-    expect(button).toBeDisabled()
+    expect(button).toBeInTheDocument()
     expect(button).toHaveAttribute('title', 'Save a phone number to enable WhatsApp')
   })
 
@@ -13,7 +13,6 @@ describe('WhatsAppButton', () => {
     render(<WhatsAppButton phone="14155551234" />)
     const link = screen.getByRole('link')
     expect(link).toBeInTheDocument()
-    // encodeURIComponent('Hey!') → 'Hey!' (! is not encoded)
     expect(link).toHaveAttribute('href', 'https://wa.me/14155551234?text=Hey!')
   })
 

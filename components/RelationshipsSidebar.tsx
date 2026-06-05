@@ -46,7 +46,7 @@ export default function RelationshipsSidebar({
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        <div className="relative px-8 pt-10 pb-8 text-center">
+        <div className="relative px-8 pt-10 pb-8 text-left">
           <button
             onClick={onToggle}
             className="absolute top-8 right-6 p-2 text-ink-muted hover:text-accent transition-colors"
@@ -54,19 +54,21 @@ export default function RelationshipsSidebar({
           >
             <OutlineIcon name="close" size="lg" />
           </button>
-          <OutlineIcon name="profiles" size="lg" className="text-ink-muted mx-auto mb-5" />
+          <OutlineIcon name="profiles" size="lg" className="text-ink-muted mb-5" />
           <h2>
-            <ThoughtfulTitle variant="section">{copy.profiles}</ThoughtfulTitle>
+            <ThoughtfulTitle variant="section" className="!justify-start">
+              {copy.profiles}
+            </ThoughtfulTitle>
           </h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="flex-1 overflow-y-auto px-8 pb-6">
           {people.length === 0 ? (
-            <p className="text-center text-sm text-ink-muted font-light leading-relaxed py-12 px-4">
+            <p className="text-left text-sm text-ink-muted font-light leading-relaxed py-12">
               {copy.profilesEmpty}
             </p>
           ) : (
-            <ul className="space-y-10">
+            <ul className="space-y-8">
               {people.map((person) => {
                 const isSelected = pathname === `/person/${person.id}`
                 return (
@@ -74,15 +76,17 @@ export default function RelationshipsSidebar({
                     <button
                       onClick={() => handlePersonClick(person.id)}
                       className={`
-                        w-full flex flex-col items-center text-center py-2
+                        w-full flex flex-col items-start text-left py-2 min-h-[44px]
                         transition-opacity duration-150
                         ${isSelected ? 'opacity-100' : 'opacity-80 hover:opacity-100'}
                       `}
                     >
                       <span className="block leading-none">
-                        <ThoughtfulTitle variant="profile">{person.name}</ThoughtfulTitle>
+                        <ThoughtfulTitle variant="profile" className="!justify-start">
+                          {person.name}
+                        </ThoughtfulTitle>
                       </span>
-                      <p className="text-xs text-ink-muted mt-3 font-light tracking-wide">
+                      <p className="text-xs text-ink-muted mt-2 font-light tracking-wide">
                         {RELATIONSHIP_LABELS[person.relationshipType]}
                       </p>
                     </button>
@@ -94,11 +98,11 @@ export default function RelationshipsSidebar({
         </div>
 
         {userEmail && onSignOut && (
-          <div className="px-8 py-8 bg-page">
-            <p className="text-xs text-ink-faint text-center truncate mb-4 font-light">{userEmail}</p>
+          <div className="px-8 py-8 bg-page text-left">
+            <p className="text-xs text-ink-faint truncate mb-4 font-light">{userEmail}</p>
             <button
               onClick={onSignOut}
-              className="w-full flex flex-col items-center gap-2 text-ink-muted hover:text-accent transition-colors"
+              className="flex items-center gap-2 text-ink-muted hover:text-accent transition-colors min-h-[44px]"
             >
               <OutlineIcon name="signOut" size="lg" />
               <span className="text-sm font-light">{copy.signOut}</span>

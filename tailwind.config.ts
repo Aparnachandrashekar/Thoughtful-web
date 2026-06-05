@@ -40,6 +40,7 @@ const config: Config = {
         'fade-up': 'fadeUp 400ms ease-out both',
         'slide-in-left': 'slideInLeft 350ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
         'slide-out-right': 'slideOutRight 250ms ease-in both',
+        'fade-out': 'fadeOut 150ms ease-in both',
         'slide-down-in': 'slideDownIn 300ms ease-out both',
         'button-pulse': 'buttonPulse 1.5s ease-in-out infinite',
         'page-in': 'pageIn 200ms ease-in-out both',
@@ -60,6 +61,10 @@ const config: Config = {
         slideOutRight: {
           '0%': { opacity: '1', transform: 'translateX(0)' },
           '100%': { opacity: '0', transform: 'translateX(24px)' },
+        },
+        fadeOut: {
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' },
         },
         slideDownIn: {
           '0%': { opacity: '0', transform: 'translateY(-10px)' },

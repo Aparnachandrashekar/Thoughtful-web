@@ -17,7 +17,6 @@ export default function RecurrenceEndDateModal({
 }: RecurrenceEndDateModalProps) {
   const [selectedOption, setSelectedOption] = useState<'forever' | 'date'>('forever')
 
-  // Default end date to 1 year from now
   const defaultEndDate = () => {
     const d = new Date()
     d.setFullYear(d.getFullYear() + 1)
@@ -46,36 +45,36 @@ export default function RecurrenceEndDateModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-scale-in">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50 font-outfit">
+      <div className="bg-page rounded-card p-6 w-full max-w-sm max-h-[86vh] overflow-y-auto shadow-card animate-fade-in">
+        <h3 className="text-lg font-semibold text-ink mb-2">
           Set Recurrence End
         </h3>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-ink-muted mb-4">
           This is a {getTypeLabel()} event. When should it stop repeating?
         </p>
 
         <div className="space-y-3 mb-6">
-          <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-lavender transition-colors">
+          <label className="flex items-center gap-3 p-3 rounded-card border border-accent/20 cursor-pointer hover:border-accent/40 transition-colors">
             <input
               type="radio"
               name="recurrenceEnd"
               checked={selectedOption === 'forever'}
               onChange={() => setSelectedOption('forever')}
-              className="w-4 h-4 text-lavender"
+              className="w-4 h-4 accent-accent"
             />
-            <span className="text-gray-700">Repeat forever</span>
+            <span className="text-ink">Repeat forever</span>
           </label>
 
-          <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-lavender transition-colors">
+          <label className="flex items-center gap-3 p-3 rounded-card border border-accent/20 cursor-pointer hover:border-accent/40 transition-colors">
             <input
               type="radio"
               name="recurrenceEnd"
               checked={selectedOption === 'date'}
               onChange={() => setSelectedOption('date')}
-              className="w-4 h-4 text-lavender"
+              className="w-4 h-4 accent-accent"
             />
-            <span className="text-gray-700">End on specific date</span>
+            <span className="text-ink">End on specific date</span>
           </label>
 
           {selectedOption === 'date' && (
@@ -84,7 +83,7 @@ export default function RecurrenceEndDateModal({
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-lavender focus:outline-none text-gray-700"
+              className="w-full px-4 py-3 border border-accent/20 rounded-card focus:border-accent/40 focus:outline-none text-ink bg-surface"
             />
           )}
         </div>
@@ -92,13 +91,13 @@ export default function RecurrenceEndDateModal({
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-2.5 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+            className="flex-1 px-4 py-2.5 text-ink-muted bg-surface rounded-card hover:bg-surface-soft transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 px-4 py-2.5 text-white bg-purple-600 rounded-xl hover:bg-purple-700 font-bold transition-colors shadow-md"
+            className="flex-1 px-4 py-2.5 text-white bg-accent rounded-card hover:bg-accent-hover font-medium transition-colors"
           >
             Confirm
           </button>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import CareActionsPanel from '@/components/CareActionsPanel'
+import StatusBanner from '@/components/StatusBanner'
 import TemplateConfirmationModal from '@/components/TemplateConfirmationModal'
 import RelationshipTypeModal from '@/components/RelationshipTypeModal'
 import DatePickerModal from '@/components/DatePickerModal'
@@ -541,18 +542,16 @@ export default function PersonProfilePage() {
         </button>
       </div>
 
-      {status && (
-        <div className="mb-6 text-center animate-fade-in">
-          <span className="inline-block text-sm text-ink-muted bg-surface px-4 py-2 rounded-card">{status}</span>
-        </div>
-      )}
-
-      <div className="mb-8">
+      <div className="mb-4">
         <ReminderInput
           onSubmit={submitProfileReminder}
           placeholder={`Reminder for ${person.name}…`}
           compact
         />
+      </div>
+
+      <div className="w-full flex justify-center mb-6 min-h-[2.75rem] px-1">
+        <StatusBanner message={status} />
       </div>
 
       <div className="mb-6">

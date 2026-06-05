@@ -5,6 +5,7 @@ import { Person } from '@/lib/types'
 import { formatDate } from '@/lib/dateFormat'
 import WhatsAppButton from '@/components/WhatsAppButton'
 import { copy } from '@/lib/copy'
+import { getPhoneForReminder } from '@/lib/reminderPhone'
 
 export interface Reminder {
   id: string
@@ -47,26 +48,7 @@ const CARD_TITLE =
 const CARD_META = 'font-outfit text-[13px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
 const REMINDER_CARD =
   'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
-  'flex items-start gap-2.5 sm:gap-3 px-3.5 py-3 sm:px-5 sm:py-4 w-full min-w-0'
-
-function findPhoneForReminder(reminder: Reminder, people?: Person[]): string {
-  if (reminder.phoneNumber) return reminder.phoneNumber.replace(/[^0-9]/g, '')
-  if (!people || people.length === 0) return ''
-
-  const linked = people.find(p => p.phone && p.linkedReminderIds.includes(reminder.id))
-  if (linked?.phone) return linked.phone.replace(/[^0-9]/g, '')
-
-  if (reminder.personName) {
-    const named = people.find(p => p.phone && p.name.toLowerCase() === reminder.personName!.toLowerCase())
-    if (named?.phone) return named.phone.replace(/[^0-9]/g, '')
-  }
-
-  const textLower = reminder.text.toLowerCase()
-  const textMatch = people.find(p => p.phone && textLower.includes(p.name.toLowerCase()))
-  if (textMatch?.phone) return textMatch.phone.replace(/[^0-9]/g, '')
-
-  return ''
-}
+  'flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 px-3.5 py-3 sm:px-5 sm:py-4 w-full min-w-0'
 
 function recurringLabel(reminder: Reminder): string {
   if (reminder.isBirthday) return 'Birthday · yearly'
@@ -79,13 +61,15 @@ function ActionButtons({
   people,
   onEdit,
   onDelete,
+  className = '',
 }: {
   reminder: Reminder
   people?: Person[]
   onEdit?: (id: string) => void
   onDelete: (id: string) => void
+  className?: string
 }) {
-  const phone = findPhoneForReminder(reminder, people)
+  const phone = getPhoneForReminder(reminder, people)
   const calendarDayUrl = (reminder.calendarHtmlLink || reminder.calendarEventId)
     ? (() => {
         const d = reminder.date instanceof Date ? reminder.date : new Date(reminder.date)
@@ -94,7 +78,7 @@ function ActionButtons({
     : null
 
   return (
-    <div className="flex items-center gap-0 flex-shrink-0 self-start mt-0.5">
+    <div className={`flex items-center gap-0 flex-shrink-0 mt-0.5 ${className}`}>
       {calendarDayUrl && (
         <a
           href={calendarDayUrl}
@@ -149,34 +133,42 @@ function ReminderCard({
   showToggle?: boolean
 }) {
   const animClass = isExiting
-    ? 'animate-slide-out-right pointer-events-none'
+    ? 'animate-fade-out pointer-events-none'
     : isNew
     ? 'animate-slide-down-in'
-    : `animate-fade-up stagger-${Math.min(index, 10)}`
+    : `max-sm:animate-fade-in sm:animate-fade-up stagger-${Math.min(index, 10)}`
 
   return (
     <div
       className={`${REMINDER_CARD} ${animClass}`}
       style={!isExiting && !isNew ? { animationFillMode: 'both' } : undefined}
     >
-      {showToggle && (
-        <button
-          onClick={() => onToggle(reminder.id)}
-          className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-faint
-                     hover:border-accent flex-shrink-0 transition-colors duration-150"
-          aria-label="Mark complete"
-        />
-      )}
-      <div className="flex-1 min-w-0">
-        <p className={CARD_TITLE}>{reminder.text}</p>
-        <p className={CARD_META}>
-          {formatDate(reminder.date, new Date())}
-          {reminder.isRecurring && (
-            <span className="text-ink-faint"> · {recurringLabel(reminder)}</span>
-          )}
-        </p>
+      <div className="flex items-start gap-2.5 flex-1 min-w-0 w-full">
+        {showToggle && (
+          <button
+            onClick={() => onToggle(reminder.id)}
+            className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-faint
+                       hover:border-accent flex-shrink-0 transition-colors duration-150"
+            aria-label="Mark complete"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className={CARD_TITLE}>{reminder.text}</p>
+          <p className={CARD_META}>
+            {formatDate(reminder.date, new Date())}
+            {reminder.isRecurring && (
+              <span className="text-ink-faint"> · {recurringLabel(reminder)}</span>
+            )}
+          </p>
+        </div>
       </div>
-      <ActionButtons reminder={reminder} people={people} onEdit={onEdit} onDelete={onDelete} />
+      <ActionButtons
+        reminder={reminder}
+        people={people}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        className="self-end sm:self-start"
+      />
     </div>
   )
 }
@@ -205,15 +197,16 @@ export default function ReminderList({
 
   const runExit = useCallback((id: string, action: () => void) => {
     setExitingIds(prev => new Set(prev).add(id))
-    setTimeout(() => {
-      action()
-      setExitingIds(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-    }, 250)
+    setTimeout(() => action(), 150)
   }, [])
+
+  // Clear exiting state once parent removes the reminder from the list
+  useEffect(() => {
+    setExitingIds(prev => {
+      const ids = [...prev].filter(id => reminders.some(r => r.id === id))
+      return ids.length === prev.size ? prev : new Set(ids)
+    })
+  }, [reminders])
 
   const handleDelete = (id: string) => runExit(id, () => onDelete(id))
   const handleToggle = (id: string) => runExit(id, () => onToggle(id))
@@ -318,7 +311,7 @@ export default function ReminderList({
                 <div
                   key={reminder.id}
                   className={`${REMINDER_CARD} items-center py-4
-                    ${exitingIds.has(reminder.id) ? 'animate-slide-out-right' : ''}`}
+                    ${exitingIds.has(reminder.id) ? 'animate-fade-out pointer-events-none' : ''}`}
                 >
                   <button
                     onClick={() => handleToggle(reminder.id)}

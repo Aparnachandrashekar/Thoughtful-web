@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 
-type IconName = 'menu' | 'profiles' | 'signOut' | 'add' | 'refresh' | 'calendar' | 'close'
+type IconName = 'menu' | 'profiles' | 'signOut' | 'add' | 'arrow' | 'refresh' | 'calendar' | 'close'
 
 const paths: Record<IconName, ReactNode> = {
   menu: (
@@ -23,6 +23,11 @@ const paths: Record<IconName, ReactNode> = {
   add: (
     <>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+    </>
+  ),
+  arrow: (
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
     </>
   ),
   refresh: (

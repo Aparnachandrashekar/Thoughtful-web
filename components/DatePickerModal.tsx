@@ -28,64 +28,56 @@ export default function DatePickerModal({ text, onConfirm, onCancel }: DatePicke
 
   return createPortal(
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
         onClick={onCancel}
       />
-
-      {/* Dialog — outer div anchors left/right to avoid 100vw overflow on iOS */}
       <div
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                 padding: '0 20px', zIndex: 50, pointerEvents: 'none' }}
+        className="fixed inset-0 z-50 flex items-center justify-center px-5 pointer-events-none"
       >
-      <div
-        style={{ width: '100%', maxWidth: '360px', background: 'white',
-                 borderRadius: '24px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-                 pointerEvents: 'auto' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-6 pt-6 pb-6">
-          <h3 className="text-lg font-semibold text-[#2D1810] mb-1">
-            When should we remind you?
-          </h3>
-          <p className="text-sm text-terra/65 font-light mb-5 leading-snug">
-            &ldquo;{previewText}&rdquo;
-          </p>
+        <div
+          className="w-full max-w-[360px] max-h-[86vh] overflow-y-auto bg-page rounded-card shadow-card pointer-events-auto animate-fade-in"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-6 pt-6 pb-6 font-outfit">
+            <h3 className="text-lg font-semibold text-ink mb-1">
+              When should we remind you?
+            </h3>
+            <p className="text-sm text-ink-muted font-light mb-5 leading-snug">
+              &ldquo;{previewText}&rdquo;
+            </p>
 
-          <label className="block text-xs font-semibold text-terra/70 uppercase tracking-widest mb-2">
-            Date &amp; Time
-          </label>
-          <input
-            type="datetime-local"
-            value={datetime}
-            min={`${minDate}T00:00`}
-            max={`${maxDate}T23:59`}
-            onChange={(e) => setDatetime(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-blush-light focus:border-terra/40
-                       rounded-2xl outline-none text-terra-deep text-sm font-light bg-white"
-          />
+            <label className="block text-xs font-semibold text-ink-muted uppercase tracking-widest mb-2">
+              Date &amp; Time
+            </label>
+            <input
+              type="datetime-local"
+              value={datetime}
+              min={`${minDate}T00:00`}
+              max={`${maxDate}T23:59`}
+              onChange={(e) => setDatetime(e.target.value)}
+              className="w-full px-4 py-3 border border-accent/20 focus:border-accent/40
+                         rounded-card outline-none text-ink text-sm font-light bg-surface"
+            />
 
-          <div className="flex gap-3 mt-5">
-            <button
-              onClick={onCancel}
-              className="flex-1 px-4 py-3 bg-blush-pale text-terra/70 rounded-pill
-                         text-sm font-medium active:bg-blush-light transition-all duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => onConfirm(new Date(datetime))}
-              className="flex-1 px-4 py-3 text-white bg-terra rounded-pill
-                         text-sm font-medium active:scale-95 transition-all duration-200
-                         shadow-[0_4px_12px_rgba(212,117,106,0.3)]"
-            >
-              Set Reminder
-            </button>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={onCancel}
+                className="flex-1 px-4 py-3 bg-surface text-ink-muted rounded-card
+                           text-sm font-medium hover:bg-surface-soft transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => onConfirm(new Date(datetime))}
+                className="flex-1 px-4 py-3 text-white bg-accent rounded-card
+                           text-sm font-medium hover:bg-accent-hover active:scale-95 transition-all duration-200"
+              >
+                Set Reminder
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </>,
     document.body

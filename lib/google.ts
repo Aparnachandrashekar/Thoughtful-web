@@ -221,7 +221,11 @@ function requestOAuthToken(options: TokenRequestOptions): void {
     state: oauthState,
     callback: (response: google.accounts.oauth2.TokenResponse) => {
       const stateResult = validateOAuthState(options.flow, response.state)
-      if (isOAuthStateFailure(stateResult)) {
+      const silentFlow = options.flow === 'calendar_silent'
+      const stateAcceptable =
+        stateResult === 'valid' ||
+        (silentFlow && stateResult === 'missing' && !!response.access_token && !response.error)
+      if (!stateAcceptable && isOAuthStateFailure(stateResult)) {
         failOAuthState(options.flow, stateResult, options.onError)
         return
       }

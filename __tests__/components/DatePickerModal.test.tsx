@@ -45,16 +45,11 @@ describe('DatePickerModal', () => {
   it('defaults time to approximately now + 10 minutes', () => {
     const before = new Date()
     render(<DatePickerModal text="test" onConfirm={mockConfirm} onCancel={mockCancel} />)
-    const timeInputs = document.querySelectorAll('input[type="time"]')
-    expect(timeInputs.length).toBeGreaterThan(0)
+    const dtInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    expect(dtInput).toBeTruthy()
 
-    const timeInput = timeInputs[0] as HTMLInputElement
-    const [hours, mins] = timeInput.value.split(':').map(Number)
-    const defaultDate = new Date()
-    defaultDate.setHours(hours, mins, 0, 0)
-
+    const defaultDate = new Date(dtInput.value)
     const tenMinsFromNow = new Date(before.getTime() + 10 * 60 * 1000)
-    // Allow 2 minute tolerance
     expect(Math.abs(defaultDate.getTime() - tenMinsFromNow.getTime())).toBeLessThan(2 * 60 * 1000)
   })
 
@@ -71,29 +66,26 @@ describe('DatePickerModal', () => {
     expect(mockConfirm.mock.calls[0][0]).toBeInstanceOf(Date)
   })
 
-  it('uses the date and time inputs when confirming', () => {
+  it('uses the datetime input when confirming', () => {
     render(<DatePickerModal text="test" onConfirm={mockConfirm} onCancel={mockCancel} />)
 
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement
-    const timeInput = document.querySelector('input[type="time"]') as HTMLInputElement
-
-    fireEvent.change(dateInput, { target: { value: '2027-06-15' } })
-    fireEvent.change(timeInput, { target: { value: '14:30' } })
+    const dtInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    fireEvent.change(dtInput, { target: { value: '2027-06-15T14:30' } })
     fireEvent.click(screen.getByText('Set Reminder'))
 
     const calledDate = mockConfirm.mock.calls[0][0] as Date
     expect(calledDate.getFullYear()).toBe(2027)
-    expect(calledDate.getMonth()).toBe(5) // June = 5
+    expect(calledDate.getMonth()).toBe(5)
     expect(calledDate.getDate()).toBe(15)
     expect(calledDate.getHours()).toBe(14)
     expect(calledDate.getMinutes()).toBe(30)
   })
 
-  it('renders date input with min and max bounds (±10 years)', () => {
+  it('renders datetime input with min and max bounds (±10 years)', () => {
     render(<DatePickerModal text="test" onConfirm={mockConfirm} onCancel={mockCancel} />)
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement
-    const minYear = parseInt(dateInput.min.slice(0, 4))
-    const maxYear = parseInt(dateInput.max.slice(0, 4))
+    const dtInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    const minYear = parseInt(dtInput.min.slice(0, 4))
+    const maxYear = parseInt(dtInput.max.slice(0, 4))
     const currentYear = new Date().getFullYear()
     expect(minYear).toBe(currentYear - 10)
     expect(maxYear).toBe(currentYear + 10)

@@ -26,28 +26,28 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px] animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-sm mx-4 animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px] animate-fade-in p-4">
+      <div className="bg-page rounded-card shadow-card p-6 w-full max-w-sm max-h-[86vh] overflow-y-auto font-outfit animate-fade-in">
 
-        <h3 className="text-lg font-semibold text-[#2D1810] mb-1">Edit reminder</h3>
-        <p className="text-xs text-terra/65 font-light mb-5">Update the title, date, or time.</p>
+        <h3 className="text-lg font-semibold text-ink mb-1">Edit reminder</h3>
+        <p className="text-xs text-ink-muted font-light mb-5">Update the title, date, or time.</p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-ink-muted uppercase tracking-[0.12em] mb-1.5">
               Title
             </label>
             <input
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blush-light focus:border-terra/40
-                         rounded-xl outline-none text-[#2D1810] text-sm font-light"
+              className="w-full px-4 py-3 border border-accent/20 focus:border-accent/40
+                         rounded-card outline-none text-ink text-sm font-light bg-surface"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-ink-muted uppercase tracking-[0.12em] mb-1.5">
               Date
             </label>
             <input
@@ -56,20 +56,20 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
               min={minDate}
               max={maxDate}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blush-light focus:border-terra/40
-                         rounded-xl outline-none text-terra-deep text-sm"
+              className="w-full px-4 py-3 border border-accent/20 focus:border-accent/40
+                         rounded-card outline-none text-ink text-sm bg-surface"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-terra/65 uppercase tracking-[0.12em] mb-1.5">
+            <label className="block text-xs font-medium text-ink-muted uppercase tracking-[0.12em] mb-1.5">
               Time
             </label>
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blush-light focus:border-terra/40
-                         rounded-xl outline-none text-terra-deep text-sm"
+              className="w-full px-4 py-3 border border-accent/20 focus:border-accent/40
+                         rounded-card outline-none text-ink text-sm bg-surface"
             />
           </div>
         </div>
@@ -77,18 +77,17 @@ export default function EditReminderModal({ reminder, onConfirm, onCancel }: Edi
         <div className="flex gap-3 mt-6">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-3 bg-blush-pale text-terra/70 rounded-pill
-                       text-sm font-medium hover:bg-blush-light transition-all duration-200"
+            className="flex-1 px-4 py-3 bg-surface text-ink-muted rounded-card
+                       text-sm font-medium hover:bg-surface-soft transition-all duration-200"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={!text.trim()}
-            className="flex-1 px-4 py-3 text-white bg-terra rounded-pill
-                       text-sm font-medium hover:bg-terra-deep transition-all duration-200
-                       active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
-                       shadow-[0_4px_12px_rgba(212,117,106,0.3)]"
+            className="flex-1 px-4 py-3 text-white bg-accent rounded-card
+                       text-sm font-medium hover:bg-accent-hover transition-all duration-200
+                       active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Save changes
           </button>

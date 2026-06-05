@@ -9,7 +9,8 @@ interface ThoughtfulTitleProps {
 
 const variantClass = {
   hero: 'text-[clamp(48px,14vw,168px)] max-sm:max-w-[calc(100vw-2rem)]',
-  profile: 'text-[clamp(28px,7vw,44px)]',
+  /** Person name — large title-card scale (sidebar + profile page) */
+  profile: 'text-[clamp(40px,11vw,96px)]',
   section: 'text-[clamp(32px,8vw,52px)]',
 }
 

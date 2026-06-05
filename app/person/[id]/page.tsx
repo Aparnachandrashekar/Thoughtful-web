@@ -476,11 +476,13 @@ export default function PersonProfilePage() {
         <span className="text-sm font-light">Back</span>
       </button>
 
-      <div className="flex flex-col items-center text-center mb-10">
-        <h1 className="leading-none">
-          <ThoughtfulTitle variant="profile">{person.name}</ThoughtfulTitle>
+      <div className="flex flex-col items-start text-left mb-10">
+        <h1 className="leading-none w-full">
+          <ThoughtfulTitle variant="profile" className="!justify-start">
+            {person.name}
+          </ThoughtfulTitle>
         </h1>
-        <span className="mt-4 inline-block text-sm text-ink-muted font-light tracking-wide">
+        <span className="mt-5 inline-block text-sm text-ink-muted font-light tracking-wide">
           {RELATIONSHIP_LABELS[person.relationshipType]}
           {person.birthday && (
             <> · {new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>

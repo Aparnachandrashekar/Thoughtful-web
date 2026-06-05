@@ -1158,11 +1158,11 @@ export default function Home() {
             <section
               className={
                 signedIn
-                  ? 'w-full pt-20 pb-5 sm:pt-24 sm:pb-6 flex flex-col items-center'
+                  ? 'w-full min-h-[72vh] pt-28 pb-5 sm:pt-36 sm:pb-8 flex flex-col items-center justify-center'
                   : 'min-h-screen flex flex-col items-center justify-center w-full'
               }
             >
-              <h1 className="leading-none text-center w-full">
+              <h1 className="leading-none text-center w-full mt-4 sm:mt-6">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
               <p className="font-outfit text-[18px] sm:text-[20px] italic text-ink-muted font-light mt-5 sm:mt-6 text-center leading-snug px-1">

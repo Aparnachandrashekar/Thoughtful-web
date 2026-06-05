@@ -37,19 +37,19 @@ interface ReminderListProps {
   newReminderId?: string | null
 }
 
-const ICON_CLASS = 'w-5 h-5 sm:w-5 sm:h-5'
+const ICON_CLASS = 'w-5 h-5'
 const ACTION_BTN =
-  'flex items-center justify-center min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] p-1.5 sm:p-2 ' +
+  'flex items-center justify-center min-h-[44px] min-w-[44px] p-1.5 sm:p-2 ' +
   'text-accent hover:text-accent-hover hover:bg-accent-soft rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
 const SECTION_LABEL =
-  'font-outfit text-xs sm:text-[15px] font-semibold text-ink-muted tracking-wide py-1.5 sm:py-3'
+  'font-outfit text-mobile-caption sm:text-[15px] font-semibold text-ink-muted tracking-wide py-1.5 sm:py-3'
 const CARD_TITLE =
-  'font-sans text-[13px] sm:text-[17px] font-semibold text-ink leading-snug tracking-tight break-words'
-const CARD_META = 'font-outfit text-[11px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
+  'font-sans text-mobile-title sm:text-[17px] font-semibold text-ink leading-snug tracking-tight break-words'
+const CARD_META = 'font-outfit text-mobile-secondary sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
 const REMINDER_CARD =
   'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
-  'grid grid-cols-[1fr_auto] items-start gap-x-2 gap-y-0 px-3 py-3 sm:px-5 sm:py-4 w-full min-w-0'
+  'grid grid-cols-[1fr_auto] items-start gap-x-2 gap-y-0 px-4 py-3 sm:px-5 sm:py-4 w-full min-w-0'
 
 function recurringLabel(reminder: Reminder): string {
   if (reminder.isBirthday) return 'Birthday · yearly'

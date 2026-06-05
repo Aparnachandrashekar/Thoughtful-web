@@ -33,7 +33,7 @@ body {
   color: var(--ink);
   background-color: #ffffff !important;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
@@ -77,6 +77,12 @@ textarea {
 .reminder-card:hover {
   transform: scale(1.01) translateY(-1px);
   box-shadow: 0 8px 32px rgba(47, 118, 232, 0.12);
+}
+
+@media (min-width: 640px) {
+  body {
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 639px) {

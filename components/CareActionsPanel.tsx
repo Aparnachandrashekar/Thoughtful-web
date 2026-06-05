@@ -37,33 +37,33 @@ export default function CareActionsPanel({
 
   return (
     <div className="bg-surface rounded-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-white/80">
+      <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-white/80">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-ink">
+          <span className="text-mobile-title sm:text-sm font-semibold text-ink">
             Suggested reminders
           </span>
           {onEditRelationship && (
             <button
               onClick={onEditRelationship}
-              className="text-xs text-ink-muted hover:text-accent transition-colors"
+              className="text-mobile-caption sm:text-xs text-ink-muted hover:text-accent transition-colors"
             >
               Change type
             </button>
           )}
         </div>
         {birthday && (
-          <p className="text-xs text-ink-muted mt-1 font-light">
+          <p className="text-mobile-secondary sm:text-xs text-ink-muted mt-1 font-light">
             Birthday {new Date(birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </p>
         )}
       </div>
 
-      <div className="p-4 space-y-2">
+      <div className="p-3 sm:p-4 space-y-2">
         {suggestedTemplates.map((template, i) => (
           <button
             key={template.id}
             onClick={() => handleTemplateClick(template)}
-            className="w-full text-left px-4 py-3 rounded-card bg-white
+            className="w-full text-left px-4 py-3 sm:px-4 sm:py-3 rounded-card bg-white
                        hover:bg-white card-interactive transition-all duration-150
                        animate-fade-up"
             style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'both' }}
@@ -72,13 +72,13 @@ export default function CareActionsPanel({
               <TemplateOutlineIcon templateId={template.id} className="text-accent" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium text-ink">{template.label}</span>
-                  <span className="text-[10px] text-ink-faint flex-shrink-0">
+                  <span className="text-mobile-title sm:text-sm font-medium text-ink">{template.label}</span>
+                  <span className="text-mobile-label sm:text-[10px] text-ink-faint flex-shrink-0">
                     {getRecurrenceLabel(template.recurrence)}
                   </span>
                 </div>
                 {template.description && (
-                  <p className="text-xs text-ink-muted mt-0.5 font-light line-clamp-1">{template.description}</p>
+                  <p className="text-mobile-secondary sm:text-xs text-ink-muted mt-0.5 font-light line-clamp-1">{template.description}</p>
                 )}
               </div>
             </div>
@@ -88,7 +88,7 @@ export default function CareActionsPanel({
         {otherTemplates.length > 0 && (
           <button
             onClick={() => setShowAllActions(!showAllActions)}
-            className="w-full py-2 text-xs text-ink-muted hover:text-accent transition-colors"
+            className="w-full py-2 text-mobile-caption sm:text-xs text-ink-muted hover:text-accent transition-colors"
           >
             {showAllActions ? 'Hide' : 'Show'} more templates
           </button>
@@ -101,7 +101,7 @@ export default function CareActionsPanel({
               if (rtTemplates.length === 0) return null
               return (
                 <div key={rt}>
-                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
+                  <p className="text-mobile-caption sm:text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
                     {RELATIONSHIP_LABELS[rt]}
                   </p>
                   <div className="space-y-1.5">
@@ -109,7 +109,7 @@ export default function CareActionsPanel({
                       <button
                         key={template.id}
                         onClick={() => handleTemplateClick(template)}
-                        className="w-full text-left px-3 py-2.5 rounded-card bg-white text-xs
+                        className="w-full text-left px-3 py-2.5 rounded-card bg-white text-mobile-caption sm:text-xs
                                    hover:shadow-card transition-all duration-150"
                       >
                         <div className="flex items-center gap-2.5">

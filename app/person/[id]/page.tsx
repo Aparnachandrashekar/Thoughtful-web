@@ -464,7 +464,7 @@ export default function PersonProfilePage() {
   const displayedReminders = activeTab === 'upcoming' ? upcomingReminders : pastReminders
 
   return (
-    <main className="app-canvas min-h-screen bg-page animate-page-in max-w-2xl mx-auto w-full px-5 sm:px-8 py-8">
+    <main className="app-canvas min-h-screen bg-page animate-page-in max-w-2xl mx-auto w-full px-4 sm:px-8 py-8">
 
       <button
         onClick={() => router.push('/')}
@@ -473,7 +473,7 @@ export default function PersonProfilePage() {
         <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform duration-150" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        <span className="text-sm font-light">Back</span>
+        <span className="text-mobile-caption sm:text-sm font-light">Back</span>
       </button>
 
       <div className="flex flex-col items-start text-left mb-10">
@@ -482,13 +482,13 @@ export default function PersonProfilePage() {
             {person.name}
           </ThoughtfulTitle>
         </h1>
-        <span className="mt-5 inline-block text-sm text-ink-muted font-light tracking-wide">
+        <span className="mt-5 inline-block text-mobile-secondary sm:text-sm text-ink-muted font-light tracking-wide">
           {RELATIONSHIP_LABELS[person.relationshipType]}
           {person.birthday && (
             <> · {new Date(person.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
           )}
         </span>
-        <p className="mt-2 text-xs text-ink-faint font-light">
+        <p className="mt-2 text-mobile-caption sm:text-xs text-ink-faint font-light">
           {upcomingReminders.length} upcoming · {pastReminders.length} past
         </p>
       </div>
@@ -510,7 +510,7 @@ export default function PersonProfilePage() {
           </div>
         ) : (
           <button onClick={() => setShowEditEmail(true)}
-            className="px-4 py-2 text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-mobile-caption sm:text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
             {person.email || 'Add email'}
           </button>
         )}
@@ -530,16 +530,16 @@ export default function PersonProfilePage() {
           </div>
         ) : (
           <button onClick={() => setShowEditPhone(true)}
-            className="px-4 py-2 text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-mobile-caption sm:text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
             {person.phone || 'Add phone'}
           </button>
         )}
         <button onClick={handleEditRelationship}
-          className="px-4 py-2 text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
+          className="px-3 py-1.5 sm:px-4 sm:py-2 text-mobile-caption sm:text-sm font-light text-ink-muted hover:text-ink hover:bg-surface rounded-card transition-colors">
           Edit relationship
         </button>
         <button onClick={() => setShowDeleteConfirm(true)}
-          className="px-4 py-2 text-sm font-light text-ink-muted hover:text-red-500 hover:bg-surface rounded-card transition-colors">
+          className="px-3 py-1.5 sm:px-4 sm:py-2 text-mobile-caption sm:text-sm font-light text-ink-muted hover:text-red-500 hover:bg-surface rounded-card transition-colors">
           Delete profile
         </button>
       </div>
@@ -569,7 +569,7 @@ export default function PersonProfilePage() {
       <div className="flex gap-2 mb-6 p-1 bg-surface rounded-card w-fit">
         <button
           onClick={() => setActiveTab('upcoming')}
-          className={`px-4 py-2 rounded-[10px] text-sm font-medium transition-all duration-150 ${
+          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-[10px] text-mobile-caption sm:text-sm font-medium transition-all duration-150 ${
             activeTab === 'upcoming' ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
           }`}
         >
@@ -577,7 +577,7 @@ export default function PersonProfilePage() {
         </button>
         <button
           onClick={() => setActiveTab('past')}
-          className={`px-4 py-2 rounded-[10px] text-sm font-medium transition-all duration-150 ${
+          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-[10px] text-mobile-caption sm:text-sm font-medium transition-all duration-150 ${
             activeTab === 'past' ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
           }`}
         >
@@ -586,52 +586,53 @@ export default function PersonProfilePage() {
       </div>
 
       {displayedReminders.length === 0 ? (
-        <p className="text-ink-muted text-sm font-light py-8 text-center">
+        <p className="text-ink-muted text-mobile-body sm:text-sm font-light py-8 text-center">
           {activeTab === 'upcoming' ? 'No upcoming reminders' : 'No past reminders yet'}
         </p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-[3px]">
           {displayedReminders.map((reminder, index) => (
             <div
               key={reminder.id}
               className={`reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40
-                flex items-start gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 w-full max-w-full min-w-0
+                grid grid-cols-[1fr_auto] items-start gap-x-2 px-4 py-3 sm:px-4 sm:py-4 w-full min-w-0
                 animate-fade-up stagger-${Math.min(index, 10)} ${
                 activeTab === 'past' ? 'opacity-70' : ''
               }`}
               style={{ animationFillMode: 'both' }}
             >
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className={`text-base font-semibold text-ink leading-snug ${activeTab === 'past' ? 'line-through' : ''}`}>
-                    {reminder.text}
-                  </p>
-                  <p className="text-xs text-ink-muted mt-1 font-light">{formatDate(reminder.date)}</p>
-                </div>
-                <div className="flex items-center gap-0.5 flex-shrink-0">
-                  {activeTab === 'upcoming' && (
-                    <button
-                      onClick={() => setEditingProfileReminder(reminder)}
-                      className="p-1.5 text-ink-faint hover:text-ink hover:bg-white/60 rounded-lg transition-colors"
-                      title="Edit"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
-                        <path strokeLinecap="round" strokeLinejoin="round"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                  )}
-                  <WhatsAppButton phone={(reminder.phoneNumber || person.phone || '').replace(/[^0-9]/g, '')} />
+              <div className="min-w-0">
+                <p className={`text-mobile-title sm:text-base font-semibold text-ink leading-snug break-words ${activeTab === 'past' ? 'line-through' : ''}`}>
+                  {reminder.text}
+                </p>
+                <p className="text-mobile-secondary sm:text-xs text-ink-muted mt-0.5 sm:mt-1 font-light">{formatDate(reminder.date)}</p>
+              </div>
+              <div className="flex items-center gap-0 flex-shrink-0">
+                {activeTab === 'upcoming' && (
                   <button
-                    onClick={() => handleDeleteReminder(reminder.id)}
-                    className="p-1.5 text-ink-faint hover:text-red-500 rounded-lg transition-colors"
-                    title="Delete"
+                    onClick={() => setEditingProfileReminder(reminder)}
+                    className="flex items-center justify-center min-h-[44px] min-w-[44px] p-1.5 sm:p-2 text-accent hover:text-accent-hover hover:bg-accent-soft rounded-lg transition-colors"
+                    title="Edit"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.75}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
-                </div>
+                )}
+                <WhatsAppButton
+                  phone={(reminder.phoneNumber || person.phone || '').replace(/[^0-9]/g, '')}
+                  className="flex items-center justify-center min-h-[44px] min-w-[44px] p-1.5 sm:p-2 text-accent hover:text-accent-hover hover:bg-accent-soft rounded-lg transition-colors"
+                />
+                <button
+                  onClick={() => handleDeleteReminder(reminder.id)}
+                  className="flex items-center justify-center min-h-[44px] min-w-[44px] p-1.5 sm:p-2 text-accent hover:text-red-500 hover:bg-accent-soft rounded-lg transition-colors"
+                  title="Delete"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
           ))}

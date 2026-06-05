@@ -28,6 +28,12 @@ const config: Config = {
       },
       fontSize: {
         body: ['14px', { lineHeight: '1.45' }],
+        display: ['34px', { lineHeight: '1.1' }],
+        'mobile-title': ['15px', { lineHeight: '1.35' }],
+        'mobile-body': ['15px', { lineHeight: '1.45' }],
+        'mobile-secondary': ['13px', { lineHeight: '1.4' }],
+        'mobile-caption': ['12px', { lineHeight: '1.35' }],
+        'mobile-label': ['11px', { lineHeight: '1.3' }],
       },
       borderRadius: {
         card: '12px',

@@ -83,8 +83,8 @@ export default function Widget() {
   }, [loadReminders])
 
   return (
-    <div className="w-full min-h-0 overflow-x-hidden bg-page px-3 py-3 font-sans">
-      <h1 className="text-lg font-bold text-ink tracking-tight">{copy.appName}</h1>
+    <div className="w-full min-h-0 overflow-x-hidden bg-page px-4 py-3 font-sans">
+      <h1 className="text-mobile-title font-bold text-ink tracking-tight">{copy.appName}</h1>
 
       <div className="mt-3">
         <ReminderInput compact onSubmit={handleSubmit} />
@@ -96,23 +96,23 @@ export default function Widget() {
 
       {reminders.length > 0 ? (
         <div className="mt-4">
-          <p className="font-outfit text-xs font-semibold text-ink-muted tracking-wide mb-2 uppercase">
+          <p className="font-outfit text-mobile-caption font-semibold text-ink-muted tracking-wide mb-2 uppercase">
             {copy.sectionUpcoming}
           </p>
           <ul className="flex flex-col gap-2">
             {reminders.map((r) => (
               <li
                 key={r.id}
-                className="rounded-card border-[0.5px] border-accent/20 bg-page px-3 py-2.5"
+                className="rounded-card border-[0.5px] border-accent/20 bg-page px-4 py-3"
               >
-                <p className="text-sm font-semibold text-ink leading-snug">{r.text}</p>
-                <p className="font-outfit text-xs text-ink-muted mt-0.5">{formatDate(r.date)}</p>
+                <p className="text-mobile-title font-semibold text-ink leading-snug">{r.text}</p>
+                <p className="font-outfit text-mobile-secondary text-ink-muted mt-0.5">{formatDate(r.date)}</p>
               </li>
             ))}
           </ul>
         </div>
       ) : (
-        <p className="font-outfit text-xs text-ink-faint mt-4">{copy.remindersEmpty}</p>
+        <p className="font-outfit text-mobile-secondary text-ink-faint mt-4">{copy.remindersEmpty}</p>
       )}
     </div>
   )

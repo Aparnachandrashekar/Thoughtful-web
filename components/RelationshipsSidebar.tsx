@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { Person, RELATIONSHIP_LABELS } from '@/lib/types'
 import OutlineIcon from '@/components/OutlineIcon'
+import ProfileShapeIcon from '@/components/ProfileShapeIcon'
 import ThoughtfulTitle from '@/components/ThoughtfulTitle'
 import { copy } from '@/lib/copy'
 
@@ -69,7 +70,7 @@ export default function RelationshipsSidebar({
             </p>
           ) : (
             <ul className="space-y-5">
-              {people.map((person) => {
+              {people.map((person, index) => {
                 const isSelected = pathname === `/person/${person.id}`
                 return (
                   <li key={person.id}>
@@ -81,17 +82,19 @@ export default function RelationshipsSidebar({
                         ${isSelected ? 'opacity-100' : 'opacity-85 hover:opacity-100'}
                       `}
                     >
-                      <span className="block leading-none w-full">
-                        <ThoughtfulTitle
-                          variant="profile"
-                          className="!justify-start !max-w-full !text-[clamp(28px,7vw,44px)]"
-                        >
-                          {person.name}
-                        </ThoughtfulTitle>
-                      </span>
-                      <p className="text-sm text-ink-muted mt-1.5 font-light tracking-wide">
-                        {RELATIONSHIP_LABELS[person.relationshipType]}
-                      </p>
+                      <div style={{ fontSize: 'clamp(28px, 7vw, 44px)' }}>
+                        <div className="flex items-center gap-[0.4em] w-full min-w-0">
+                          <ProfileShapeIcon index={index} />
+                          <span className="font-sans font-bold text-ink tracking-tight leading-[1.15] truncate">
+                            {person.name}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 pl-[calc(0.78em+0.4em)]">
+                          <p className="text-sm text-ink-muted font-light tracking-wide">
+                            {RELATIONSHIP_LABELS[person.relationshipType]}
+                          </p>
+                        </div>
+                      </div>
                     </button>
                   </li>
                 )

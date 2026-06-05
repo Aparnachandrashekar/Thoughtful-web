@@ -82,7 +82,10 @@ export default function RelationshipsSidebar({
                       `}
                     >
                       <span className="block leading-none w-full">
-                        <ThoughtfulTitle variant="profile" className="!justify-start !max-w-full">
+                        <ThoughtfulTitle
+                          variant="profile"
+                          className="!justify-start !max-w-full !text-[clamp(28px,7vw,44px)]"
+                        >
                           {person.name}
                         </ThoughtfulTitle>
                       </span>

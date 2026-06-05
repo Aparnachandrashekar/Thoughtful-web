@@ -43,7 +43,7 @@ const ACTION_BTN =
   'text-accent hover:text-accent-hover hover:bg-accent-soft rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
 const SECTION_LABEL =
-  'font-outfit text-mobile-caption sm:text-[15px] font-semibold text-ink-muted tracking-wide py-1.5 sm:py-3'
+  'font-outfit text-mobile-caption sm:text-[15px] font-semibold text-ink-muted tracking-wide py-1.5 sm:py-3 max-md:pt-5 max-md:pb-2'
 const CARD_TITLE =
   'font-sans text-mobile-title sm:text-[17px] font-semibold text-ink leading-snug tracking-tight break-words'
 const CARD_META = 'font-outfit text-mobile-secondary sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'

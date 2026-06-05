@@ -8,7 +8,9 @@ interface ThoughtfulTitleProps {
 }
 
 const variantClass = {
-  hero: 'text-[clamp(44px,13vw,168px)] max-sm:max-w-full sm:max-w-[calc(100vw-2rem)]',
+  hero:
+    'text-[clamp(44px,13vw,168px)] sm:max-w-[calc(100vw-2rem)] ' +
+    'max-md:text-[clamp(58px,17.5vw,168px)] max-md:max-w-full max-md:w-full max-md:tracking-[-0.03em] max-md:font-extrabold',
   /** Person name — large title-card scale (sidebar + profile page) */
   profile: 'text-[clamp(40px,11vw,96px)]',
   section: 'text-[clamp(32px,8vw,52px)]',
@@ -24,6 +26,7 @@ export default function ThoughtfulTitle({
       className={`
         font-sans font-bold text-ink tracking-tight leading-none
         inline-flex items-baseline justify-center max-w-full
+        ${variant === 'hero' ? 'max-md:leading-[0.95]' : ''}
         ${variantClass[variant]} ${className}
       `}
     >

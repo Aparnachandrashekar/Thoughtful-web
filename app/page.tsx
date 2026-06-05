@@ -1107,7 +1107,7 @@ export default function Home() {
       <main className="relative z-10 w-full bg-page">
           {/* Signed-in toolbar — floats over hero */}
           {signedIn && (
-            <header className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-5 sm:px-8 max-w-3xl mx-auto">
+            <header className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-5 sm:px-8 max-w-3xl mx-auto max-md:top-3 max-md:px-4">
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-muted hover:text-accent transition-colors"
@@ -1183,23 +1183,23 @@ export default function Home() {
             <section
               className={
                 signedIn
-                  ? 'w-full max-sm:pt-20 max-sm:pb-4 sm:min-h-[72vh] pt-28 pb-5 sm:pt-36 sm:pb-8 flex flex-col items-center max-sm:justify-start sm:justify-center'
-                  : 'min-h-screen flex flex-col items-center justify-center w-full max-sm:px-0'
+                  ? 'w-full max-sm:pt-20 max-sm:pb-4 sm:min-h-[72vh] pt-28 pb-5 sm:pt-36 sm:pb-8 flex flex-col items-center max-sm:justify-start sm:justify-center max-md:pt-14 max-md:pb-6'
+                  : 'min-h-screen flex flex-col items-center justify-center w-full max-sm:px-0 max-md:pt-8'
               }
             >
-              <h1 className="leading-none text-center w-full mt-4 sm:mt-6">
+              <h1 className="leading-none text-center w-full mt-4 sm:mt-6 max-md:mt-2 max-md:px-0">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
-              <p className="font-outfit text-mobile-body sm:text-[20px] italic text-ink-muted font-light mt-3 sm:mt-6 text-center leading-snug px-1">
+              <p className="font-outfit text-mobile-body sm:text-[20px] italic text-ink-muted font-light mt-3 sm:mt-6 text-center leading-snug px-1 max-md:mt-7">
                 {copy.tagline}
               </p>
-              <p className="font-outfit text-mobile-secondary sm:text-[14px] italic text-[#9CA3AF] font-light mt-1.5 sm:mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
+              <p className="font-outfit text-mobile-secondary sm:text-[14px] italic text-[#9CA3AF] font-light mt-1.5 sm:mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2 max-md:mt-4 max-md:mb-6">
                 {copy.description}
               </p>
-              <div className="w-full min-h-[2.75rem] flex items-center justify-center mb-1 px-1">
+              <div className="w-full min-h-[2.75rem] flex items-center justify-center mb-1 px-1 max-md:min-h-[2rem] max-md:mb-2">
                 <StatusBanner message={status} />
               </div>
-              <div className="w-full mt-4">
+              <div className="w-full mt-4 max-md:mt-8">
                 <ReminderInput hero onSubmit={handleAddReminder} />
               </div>
               {signedIn && googleReady && !calendarConnected && !refreshingCalendar && (
@@ -1212,7 +1212,7 @@ export default function Home() {
                 </p>
               )}
               {signedIn && (
-                <p className="mt-4 sm:mt-5 font-outfit text-mobile-secondary sm:text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto">
+                <p className="mt-4 sm:mt-5 font-outfit text-mobile-secondary sm:text-body text-ink-faint text-center leading-relaxed max-w-md mx-auto max-md:mt-7">
                   {copy.helpText}
                 </p>
               )}
@@ -1250,7 +1250,7 @@ export default function Home() {
             </section>
 
             {signedIn && (
-              <section className="w-full pt-3 pb-12 sm:pb-24">
+              <section className="w-full pt-3 pb-12 sm:pb-24 max-md:pt-12 max-md:mt-2">
                 {/* Mobile: full column width; desktop: same width as title column */}
                 <div className="w-full sm:max-w-none">
                 {gcalUpdates.length > 0 && (

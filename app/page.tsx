@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Script from 'next/script'
-import { signInAnonymously } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { ensureFirebaseAuth } from '@/lib/firebaseAuth'
 import ReminderInput from '@/components/ReminderInput'
 import OutlineIcon from '@/components/OutlineIcon'
 import GoogleSignInButton from '@/components/GoogleSignInButton'
@@ -32,7 +31,9 @@ import {
   getOrCreateThoughtfulCalendar,
   trySilentCalendarRefresh,
   RecurrenceOptions,
-  getStoredEmail
+  getStoredEmail,
+  hasIdentitySession,
+  hasCalendarGrant,
 } from '@/lib/google'
 import { logGoogleAuthEvent } from '@/lib/googleAuthAnalytics'
 import { generateTitle } from '@/lib/ai'
@@ -41,7 +42,7 @@ import { loadPeople, createPerson, findPersonByName, linkReminderToPerson } from
 import { getPrimaryDetectedName } from '@/lib/personDetection'
 import { syncReminderToFirestore, deleteReminderFromFirestore, syncPersonToFirestore, fullSyncToFirestore, pullFromFirestore } from '@/lib/db'
 import { getPhoneForReminder, whatsappLinkForPhone } from '@/lib/reminderPhone'
-import { startReminderEngine, stopReminderEngine } from '@/lib/reminderEngine'
+import { startReminderEngine, stopReminderEngine, checkDueRemindersNow } from '@/lib/reminderEngine'
 
 function oauthErrorMessage(reason: string): string {
   if (reason.startsWith('state_')) {
@@ -89,7 +90,9 @@ export default function Home() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [mounted, setMounted] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
-  const [signedIn, setSignedIn] = useState(false)
+  const [signedIn, setSignedIn] = useState(() =>
+    typeof window !== 'undefined' ? !!getStoredEmail() : false
+  )
   const [calendarConnected, setCalendarConnected] = useState(false)
   // True while a silent token refresh is in flight — hides the "Reconnect Calendar" button during the attempt
   const [refreshingCalendar, setRefreshingCalendar] = useState(false)
@@ -99,7 +102,9 @@ export default function Home() {
   const [signInTimedOut, setSignInTimedOut] = useState(false)
   const silentRefreshInFlight = useRef(false)
   const [firebaseReady, setFirebaseReady] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? getStoredEmail() : null
+  )
   const [status, setStatus] = useState<string | null>(null)
   const [newReminderId, setNewReminderId] = useState<string | null>(null)
   const [gcalUpdates, setGcalUpdates] = useState<Array<{ id: string; text: string; change: string }>>([])
@@ -131,7 +136,24 @@ export default function Home() {
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) {
-          setReminders(parsed.map((r: Reminder) => ({ ...r, date: new Date(r.date) })))
+          let needsBackfill = false
+          const normalized = parsed.map((r: Reminder) => {
+            const date = new Date(r.date)
+            let triggerAt = r.triggerAt
+            if (typeof triggerAt !== 'number') {
+              needsBackfill = true
+              if (r.isBirthday || r.isAnniversary) {
+                triggerAt = date.getTime() - 24 * 60 * 60 * 1000
+              } else {
+                triggerAt = date.getTime()
+              }
+            }
+            return { ...r, date, triggerAt }
+          })
+          if (needsBackfill) {
+            localStorage.setItem(key, JSON.stringify(normalized))
+          }
+          setReminders(normalized)
           return
         }
       }
@@ -282,14 +304,7 @@ export default function Home() {
       }
     }
 
-    // Sign in to Firebase anonymously so Firestore security rules (request.auth != null) pass.
-    // Must run before the Firestore sync effect — setFirebaseReady(true) gates that effect.
-    signInAnonymously(auth)
-      .then(() => setFirebaseReady(true))
-      .catch((err) => {
-        console.warn('Anonymous Firebase auth failed (Firestore sync may not work):', err?.code)
-        setFirebaseReady(true) // Still unblock sync — Firestore calls will fail gracefully
-      })
+    ensureFirebaseAuth().then(() => setFirebaseReady(true))
 
   }, [attemptSilentCalendarRefresh, syncUnsyncedRemindersToCalendar])
 
@@ -463,9 +478,15 @@ export default function Home() {
       syncFromFirestore(false)
       if (hasCalendarAccess()) {
         checkForCalendarChanges()
-      } else if (getStoredEmail() && (window as any).google?.accounts?.oauth2) {
+      } else if (
+        hasCalendarGrant() &&
+        hasIdentitySession() &&
+        (window as any).google?.accounts?.oauth2 &&
+        !silentRefreshInFlight.current
+      ) {
         attemptSilentCalendarRefresh()
       }
+      checkDueRemindersNow()
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
@@ -1062,8 +1083,12 @@ export default function Home() {
         onError={() => setGisLoadError(true)}
         onLoad={() => {
           setGoogleReady(true)
-          // Proactively refresh if the token expired while the GIS script was loading
-          if (!hasCalendarAccess() && getStoredEmail()) {
+          if (
+            !hasCalendarAccess() &&
+            hasCalendarGrant() &&
+            hasIdentitySession() &&
+            !silentRefreshInFlight.current
+          ) {
             attemptSilentCalendarRefresh()
           }
         }}
@@ -1085,7 +1110,7 @@ export default function Home() {
             <header className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-5 sm:px-8 max-w-3xl mx-auto">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 text-ink-muted hover:text-accent transition-colors"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-muted hover:text-accent transition-colors"
                 aria-label="Open profiles"
               >
                 <OutlineIcon name="profiles" size="lg" />
@@ -1096,7 +1121,7 @@ export default function Home() {
                     type="button"
                     onClick={handleConnectCalendar}
                     disabled={connectingCalendar}
-                    className="p-2 text-ink-muted hover:text-accent rounded-card transition-colors disabled:opacity-40"
+                    className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-muted hover:text-accent rounded-card transition-colors disabled:opacity-40"
                     title="Connect Google Calendar"
                   >
                     <OutlineIcon name="calendar" size="lg" />
@@ -1104,7 +1129,7 @@ export default function Home() {
                 )}
                 <button
                   onClick={() => { syncFromFirestore(true); checkForCalendarChanges() }}
-                  className="p-2 text-ink-muted hover:text-accent transition-colors"
+                  className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-muted hover:text-accent transition-colors"
                   title="Sync"
                   aria-label="Sync"
                 >
@@ -1112,7 +1137,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={handleGoogleSignOut}
-                  className="p-2 text-ink-muted hover:text-accent transition-colors"
+                  className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-muted hover:text-accent transition-colors"
                   title="Sign out"
                   aria-label="Sign out"
                 >
@@ -1153,28 +1178,28 @@ export default function Home() {
           )}
 
           {/* sm+: one column sized to the title; mobile: full-width cards below hero */}
-          <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6">
-            <div className="w-full sm:w-fit max-w-[calc(100vw-2rem)] sm:max-w-none flex flex-col items-stretch">
+          <div className="w-full mx-auto flex flex-col items-center px-4 sm:px-6 max-sm:overflow-x-hidden">
+            <div className="w-full sm:w-fit max-sm:max-w-full sm:max-w-none flex flex-col items-stretch">
             <section
               className={
                 signedIn
-                  ? 'w-full min-h-[72vh] pt-28 pb-5 sm:pt-36 sm:pb-8 flex flex-col items-center justify-center'
-                  : 'min-h-screen flex flex-col items-center justify-center w-full'
+                  ? 'w-full max-sm:pt-20 max-sm:pb-4 sm:min-h-[72vh] pt-28 pb-5 sm:pt-36 sm:pb-8 flex flex-col items-center max-sm:justify-start sm:justify-center'
+                  : 'min-h-screen flex flex-col items-center justify-center w-full max-sm:px-0'
               }
             >
               <h1 className="leading-none text-center w-full mt-4 sm:mt-6">
                 <ThoughtfulTitle variant="hero">{copy.appName}</ThoughtfulTitle>
               </h1>
-              <p className="font-outfit text-[18px] sm:text-[20px] italic text-ink-muted font-light mt-5 sm:mt-6 text-center leading-snug px-1">
+              <p className="font-outfit text-[16px] sm:text-[20px] italic text-ink-muted font-light mt-4 sm:mt-6 text-center leading-snug px-1">
                 {copy.tagline}
               </p>
-              <p className="font-outfit text-[13px] sm:text-[14px] italic text-[#9CA3AF] font-light mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
+              <p className="font-outfit text-[12px] sm:text-[14px] italic text-[#9CA3AF] font-light mt-2 sm:mt-3 mb-3 text-center leading-relaxed max-w-xl mx-auto px-2">
                 {copy.description}
               </p>
               <div className="w-full min-h-[2.75rem] flex items-center justify-center mb-1 px-1">
                 <StatusBanner message={status} />
               </div>
-              <div className="w-full mt-4">
+              <div className={`w-full mt-4 ${signedIn ? 'max-sm:hidden' : ''}`}>
                 <ReminderInput hero onSubmit={handleAddReminder} />
               </div>
               {signedIn && googleReady && !calendarConnected && !refreshingCalendar && (
@@ -1191,7 +1216,7 @@ export default function Home() {
                   {copy.helpText}
                 </p>
               )}
-              {!signedIn && (
+              {mounted && !signedIn && (
                 <div className="mt-8 w-full text-center">
                   {gisLoadError ? (
                     <div className="space-y-2">
@@ -1225,7 +1250,7 @@ export default function Home() {
             </section>
 
             {signedIn && (
-              <section className="w-full pb-24 pt-3">
+              <section className="w-full pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-24">
                 {/* Mobile: full column width; desktop: same width as title column */}
                 <div className="w-full sm:max-w-none">
                 {gcalUpdates.length > 0 && (
@@ -1285,6 +1310,13 @@ export default function Home() {
           onConfirm={handleRecurrenceEndDatePicked}
           onCancel={() => setPendingRecurrence(null)}
         />
+      )}
+
+      {/* Mobile signed-in: input pinned to bottom */}
+      {signedIn && (
+        <div className="fixed bottom-0 inset-x-0 z-30 sm:hidden pb-[env(safe-area-inset-bottom)] bg-page/95 backdrop-blur-sm">
+          <ReminderInput bottomBar onSubmit={handleAddReminder} />
+        </div>
       )}
       </main>
 

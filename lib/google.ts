@@ -84,7 +84,8 @@ function migrateAuthStorage(): void {
   })
 }
 
-function hasCalendarGrant(): boolean {
+export function hasCalendarGrant(): boolean {
+  if (typeof window === 'undefined') return false
   return localStorage.getItem(CALENDAR_GRANTED_KEY) === 'true'
 }
 

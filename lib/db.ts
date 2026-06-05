@@ -135,15 +135,26 @@ function getDueRemindersFromLocalStorage(email: string): Array<{ id: string; [ke
 }
 
 export async function getDueReminders(email: string): Promise<Array<{ id: string; [key: string]: any }>> {
+  // localStorage is source of truth — use it whenever reminders exist locally
+  if (typeof window !== 'undefined') {
+    const key = `thoughtful-reminders-${email}`
+    if (localStorage.getItem(key)) {
+      return getDueRemindersFromLocalStorage(email)
+    }
+  }
+
   try {
     const col = remindersCol(email)
+    const now = Date.now()
     const q = query(
       col,
       where('triggered', '==', false),
-      where('triggerAt', '<=', Date.now())
+      where('triggerAt', '<=', now)
     )
     const snap = await getDocs(q)
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => !r.isCompleted)
   } catch (e) {
     console.error('Firestore: failed to query due reminders, falling back to localStorage:', e)
     return getDueRemindersFromLocalStorage(email)

@@ -39,7 +39,7 @@ interface ReminderListProps {
 
 const ICON_CLASS = 'w-4 h-4 sm:w-5 sm:h-5'
 const ACTION_BTN =
-  'p-1.5 sm:p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
+  'flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-ink-faint hover:text-ink hover:bg-white/70 rounded-lg transition-all duration-150'
 const SECTION_RULE = 'border-0 border-t border-white h-px w-full'
 const SECTION_LABEL =
   'font-outfit text-sm sm:text-[15px] font-semibold text-ink-muted tracking-wide py-2 sm:py-3'
@@ -48,7 +48,7 @@ const CARD_TITLE =
 const CARD_META = 'font-outfit text-[13px] sm:text-[14px] text-ink-muted mt-0.5 sm:mt-1 font-normal'
 const REMINDER_CARD =
   'reminder-card bg-page rounded-card border-[0.5px] border-accent/20 hover:border-accent/40 ' +
-  'flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 px-3.5 py-3 sm:px-5 sm:py-4 w-full min-w-0'
+  'flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 px-4 py-4 sm:px-5 sm:py-4 w-full min-w-0'
 
 function recurringLabel(reminder: Reminder): string {
   if (reminder.isBirthday) return 'Birthday · yearly'

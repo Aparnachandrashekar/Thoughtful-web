@@ -20,7 +20,7 @@ export default function WidgetLayout({
 }) {
   return (
     <html lang="en">
-      <body className="app-canvas min-h-screen bg-page text-ink antialiased font-sans">
+      <body className="app-canvas min-h-screen bg-page text-ink antialiased font-sans overflow-x-hidden">
         {children}
       </body>
     </html>

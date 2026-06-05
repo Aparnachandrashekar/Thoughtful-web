@@ -5,10 +5,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600&family=Roboto:wght@500&family=Dancing+Script:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
 
 :root {
-  --foreground: #5C5C5C;
-  --background: #FFFFFF;
-  --accent: #2575E6;
-  --surface: #F0F7FF;
+  --page: #FFFFFF;
+  --surface: #F8FBFF;
+  --surface-soft: #F3F8FF;
+
+  --accent: #2F76E8;
+  --accent-hover: #2568D9;
+  --accent-soft: #EAF2FF;
+
+  --ink: #444444;
+  --ink-muted: #7D8693;
+  --ink-faint: #AEB8C5;
+
+  --border: #E7EEF8;
+  --border-hover: #D8E4F5;
 }
 
 /* Page canvas is always pure white — powder blue is only on cards/inputs */
@@ -20,7 +30,7 @@ body,
 }
 
 body {
-  color: var(--foreground);
+  color: var(--ink);
   background-color: #ffffff !important;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
@@ -40,7 +50,7 @@ html {
 }
 
 *:focus-visible {
-  outline: 2px solid #2575E6;
+  outline: 2px solid #2F76E8;
   outline-offset: 2px;
 }
 
@@ -57,7 +67,7 @@ textarea {
 }
 .card-interactive:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 24px rgba(186, 220, 255, 0.32);
+  box-shadow: 0 8px 32px rgba(47, 118, 232, 0.12);
 }
 
 /* Reminder card — white fill, blue outline, lift on hover */
@@ -66,7 +76,7 @@ textarea {
 }
 .reminder-card:hover {
   transform: scale(1.01) translateY(-1px);
-  box-shadow: 0 4px 16px rgba(37, 117, 230, 0.08);
+  box-shadow: 0 8px 32px rgba(47, 118, 232, 0.12);
 }
 
 @media (max-width: 639px) {

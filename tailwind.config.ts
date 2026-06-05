@@ -8,14 +8,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#5C5C5C',
-        accent: '#2575E6',
-        'accent-hover': '#1A65D6',
+        ink: '#444444',
+        'ink-muted': '#7D8693',
+        'ink-faint': '#AEB8C5',
+        accent: '#2F76E8',
+        'accent-hover': '#2568D9',
+        'accent-soft': '#EAF2FF',
         page: '#FFFFFF',
-        surface: '#F0F7FF',
-        'surface-soft': '#E8F2FF',
-        'ink-muted': '#949494',
-        'ink-faint': '#B8B8B8',
+        surface: '#F8FBFF',
+        'surface-soft': '#F3F8FF',
+        border: '#E7EEF8',
+        'border-hover': '#D8E4F5',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -31,9 +34,9 @@ const config: Config = {
         lg: '16px',
       },
       boxShadow: {
-        card: '0 2px 16px rgba(186, 220, 255, 0.22)',
-        'card-hover': '0 4px 24px rgba(186, 220, 255, 0.32)',
-        input: '0 4px 28px rgba(186, 220, 255, 0.28)',
+        card: '0 2px 16px rgba(47, 118, 232, 0.08)',
+        'card-hover': '0 8px 32px rgba(47, 118, 232, 0.12)',
+        input: '0 4px 24px rgba(47, 118, 232, 0.08)',
       },
       animation: {
         'fade-in': 'fadeIn 200ms ease-in-out both',
@@ -71,8 +74,8 @@ const config: Config = {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         buttonPulse: {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(37, 99, 235, 0.35)' },
-          '50%': { boxShadow: '0 0 0 6px rgba(37, 99, 235, 0)' },
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(47, 118, 232, 0.35)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(47, 118, 232, 0)' },
         },
         pageIn: {
           '0%': { opacity: '0' },
